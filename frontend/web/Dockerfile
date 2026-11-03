@@ -1,12 +1,12 @@
-# Combined single-host frontend image for OpenShift.
+# Combined single-host web image: the shell and all seven remotes behind one nginx.
 # Build context = frontend monorepo ROOT:
-#   docker build -f web/Dockerfile.openshift -t <repo>/web-frontend .
+#   docker build -f web/Dockerfile -t web-frontend .
 #
 # Builds the shell + every micro-frontend from the workspace, wiring Module
 # Federation remotes to same-origin /mf/<name>/ paths, then serves everything
 # from one nginx. The Expo `mobile` workspace is dropped so the web build does
 # not pull native/Expo dependencies.
-FROM node:20 AS build
+FROM node:24 AS build
 WORKDIR /app
 
 COPY package.json package-lock.json tsconfig.base.json ./
@@ -36,7 +36,12 @@ RUN cd web/shell && \
     VITE_PRODUCTS_MF_URL=/mf/products/assets/remoteEntry.js \
     npx vite build
 
-FROM nginxinc/nginx-unprivileged:1.27-alpine
+FROM nginxinc/nginx-unprivileged:1.30.6-alpine
+# The base image trails Alpine security fixes (OpenSSL, nginx, brotli); apply them, then drop back
+# to the image's unprivileged nginx user (UID 101).
+USER root
+RUN apk upgrade --no-cache
+USER 101
 COPY --from=build /app/web/shell/dist           /usr/share/nginx/html
 COPY --from=build /app/web/auth-mf/dist         /usr/share/nginx/html/mf/auth
 COPY --from=build /app/web/warehouses-mf/dist   /usr/share/nginx/html/mf/warehouses
@@ -45,5 +50,5 @@ COPY --from=build /app/web/orders-mf/dist       /usr/share/nginx/html/mf/orders
 COPY --from=build /app/web/companies-mf/dist    /usr/share/nginx/html/mf/companies
 COPY --from=build /app/web/fleet-mf/dist        /usr/share/nginx/html/mf/fleet
 COPY --from=build /app/web/products-mf/dist     /usr/share/nginx/html/mf/products
-COPY web/nginx.openshift.conf /etc/nginx/conf.d/default.conf
+COPY web/nginx.conf /etc/nginx/conf.d/default.conf
 EXPOSE 8080

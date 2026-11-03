@@ -1,3 +1,12 @@
+# Adapted from the Inventory-Supply-Management repo CI for the Novo monorepo layout.
+# Changes from the original:
+#   - paths: services/ -> backend/services/, mobile-gateway -> backend/gateways/mobile-gateway,
+#     e2e -> tests/e2e, compose.yaml -> deploy/docker/compose.yaml
+#   - added the web gateway (backend/gateways/web-gateway), which the original did not build
+#   - the Angular web-app job and the eight per-remote micro-frontends jobs pointed at folders
+#     that no longer exist (web-app/, micro-frontends/). They are replaced by one job for the
+#     frontend npm workspace (web shell + 7 remotes + shared packages + Expo mobile tests),
+#     which is how the frontend actually builds now (one lockfile at frontend/).
 name: Inventory Microservices CI
 
 on:
@@ -9,9 +18,19 @@ on:
   workflow_dispatch:
 
 jobs:
-  # ── Java / Spring services ───────────────────────────────────────────────
-  build-auth-microservice:
+  # ── Java / Spring services and the web gateway ───────────────────────────
+  java:
+    name: java (${{ matrix.name }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: auth-service,      dir: backend/services/auth-service }
+          - { name: company-service,   dir: backend/services/company-service }
+          - { name: warehouse-service, dir: backend/services/warehouse-service }
+          - { name: inventory-service, dir: backend/services/inventory-service }
+          - { name: web-gateway,       dir: backend/gateways/web-gateway }
     steps:
       - uses: actions/checkout@v4
 
@@ -23,96 +42,28 @@ jobs:
           cache: maven
 
       - name: Run unit + integration tests
-        working-directory: services/auth-service
+        working-directory: ${{ matrix.dir }}
         run: mvn test
 
-      - name: Build auth service
-        working-directory: services/auth-service
+      - name: Build ${{ matrix.name }}
+        working-directory: ${{ matrix.dir }}
         run: mvn clean package -DskipTests
 
       - name: Build Docker image
-        working-directory: services/auth-service
-        run: docker build -t inventory/auth-service:latest .
-
-
-  build-company-microservice:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up JDK 21
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: 21
-          cache: maven
-
-      - name: Run unit + integration tests
-        working-directory: services/company-service
-        run: mvn test
-
-      - name: Build company service
-        working-directory: services/company-service
-        run: mvn clean package -DskipTests
-
-      - name: Build Docker image
-        working-directory: services/company-service
-        run: docker build -t inventory/company-service:latest .
-
-
-  build-warehouse-microservice:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up JDK 21
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: 21
-          cache: maven
-
-      - name: Run unit + integration tests
-        working-directory: services/warehouse-service
-        run: mvn test
-
-      - name: Build warehouse service
-        working-directory: services/warehouse-service
-        run: mvn clean package -DskipTests
-
-      - name: Build Docker image
-        working-directory: services/warehouse-service
-        run: docker build -t inventory/warehouse-service:latest .
-
-
-  build-inventory-microservice:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up JDK 21
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: 21
-          cache: maven
-
-      - name: Run unit + integration tests
-        working-directory: services/inventory-service
-        run: mvn test
-
-      - name: Build inventory service
-        working-directory: services/inventory-service
-        run: mvn clean package -DskipTests
-
-      - name: Build Docker image
-        working-directory: services/inventory-service
-        run: docker build -t inventory/inventory-service:latest .
-
+        working-directory: ${{ matrix.dir }}
+        run: docker build -t inventory/${{ matrix.name }}:latest .
 
   # ── .NET services ────────────────────────────────────────────────────────
-  build-fleet-microservice:
+  dotnet:
+    name: dotnet (${{ matrix.name }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: fleet-service,   dir: backend/services/fleet-service,   build_dir: backend/services/fleet-service/fleet-service.Tests,     test_target: '' }
+          - { name: product-service, dir: backend/services/product-service, build_dir: backend/services/product-service/product-service.Tests, test_target: '' }
+          - { name: order-service,   dir: backend/services/order-service,   build_dir: backend/services/order-service,                         test_target: order-service.Tests/order-service.Tests.csproj }
     steps:
       - uses: actions/checkout@v4
 
@@ -122,79 +73,32 @@ jobs:
           dotnet-version: '9.0.x'
 
       - name: Restore dependencies
-        working-directory: services/fleet-service/fleet-service.Tests
+        working-directory: ${{ matrix.build_dir }}
         run: dotnet restore
 
-      - name: Build fleet service
-        working-directory: services/fleet-service/fleet-service.Tests
+      - name: Build ${{ matrix.name }}
+        working-directory: ${{ matrix.build_dir }}
         run: dotnet build --no-restore -c Release
 
       - name: Run unit tests
-        working-directory: services/fleet-service/fleet-service.Tests
-        run: dotnet test --no-build -c Release
+        working-directory: ${{ matrix.build_dir }}
+        run: dotnet test ${{ matrix.test_target }} --no-build -c Release
 
       - name: Build Docker image
-        working-directory: services/fleet-service
-        run: docker build -t inventory/fleet-service:latest .
+        working-directory: ${{ matrix.dir }}
+        run: docker build -t inventory/${{ matrix.name }}:latest .
 
-
-  build-product-microservice:
+  # ── Node.js services and the mobile gateway ──────────────────────────────
+  node:
+    name: node (${{ matrix.name }})
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup .NET 9 SDK
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '9.0.x'
-
-      - name: Restore dependencies
-        working-directory: services/product-service/product-service.Tests
-        run: dotnet restore
-
-      - name: Build product service
-        working-directory: services/product-service/product-service.Tests
-        run: dotnet build --no-restore -c Release
-
-      - name: Run unit tests
-        working-directory: services/product-service/product-service.Tests
-        run: dotnet test --no-build -c Release
-
-      - name: Build Docker image
-        working-directory: services/product-service
-        run: docker build -t inventory/product-service:latest .
-
-
-  build-order-microservice:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup .NET 9 SDK
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '9.0.x'
-
-      - name: Restore dependencies
-        working-directory: services/order-service
-        run: dotnet restore
-
-      - name: Build order service
-        working-directory: services/order-service
-        run: dotnet build --no-restore -c Release
-
-      - name: Run unit tests
-        working-directory: services/order-service
-        run: dotnet test order-service.Tests/order-service.Tests.csproj --no-build -c Release
-
-      - name: Build Docker image
-        working-directory: services/order-service
-        run: docker build -t inventory/order-service:latest .
-
-
-  # ── Node.js services ─────────────────────────────────────────────────────
-  build-notification-microservice:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: notification-service, dir: backend/services/notification-service }
+          - { name: ai-service,           dir: backend/services/ai-service }
+          - { name: mobile-gateway,       dir: backend/gateways/mobile-gateway }
     steps:
       - uses: actions/checkout@v4
 
@@ -203,26 +107,26 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
-          cache-dependency-path: services/notification-service/package-lock.json
+          cache-dependency-path: ${{ matrix.dir }}/package-lock.json
 
       - name: Install dependencies
-        working-directory: services/notification-service
+        working-directory: ${{ matrix.dir }}
         run: npm ci
 
       - name: Run unit tests
-        working-directory: services/notification-service
+        working-directory: ${{ matrix.dir }}
         run: npm test
 
-      - name: Build notification service
-        working-directory: services/notification-service
+      - name: Build ${{ matrix.name }}
+        working-directory: ${{ matrix.dir }}
         run: npm run build
 
       - name: Build Docker image
-        working-directory: services/notification-service
-        run: docker build -t inventory/notification-service:latest .
+        working-directory: ${{ matrix.dir }}
+        run: docker build -t inventory/${{ matrix.name }}:latest .
 
-
-  build-ai-microservice:
+  # ── Frontend workspace (web shell, 7 remotes, shared packages, mobile) ───
+  frontend:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -230,278 +134,35 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '20.19.4'
           cache: 'npm'
-          cache-dependency-path: services/ai-service/package-lock.json
+          cache-dependency-path: frontend/package-lock.json
 
-      - name: Install dependencies
-        working-directory: services/ai-service
+      - name: Install workspace dependencies
+        working-directory: frontend
         run: npm ci
 
-      - name: Run unit tests
-        working-directory: services/ai-service
-        run: npm test
+      - name: Run unit tests (all workspaces that define them)
+        working-directory: frontend
+        run: npm test --workspaces --if-present
 
-      - name: Build ai service
-        working-directory: services/ai-service
-        run: npm run build
+      - name: Build web shell and remotes
+        working-directory: frontend
+        run: npm run build --workspaces --if-present
 
-      - name: Build Docker image
-        working-directory: services/ai-service
-        run: docker build -t inventory/ai-service:latest .
-
-
-  # ── Mobile Gateway (Express/TypeScript) ──────────────────────────────────
-  build-mobile-gateway:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: mobile-gateway/package-lock.json
-
-      - name: Install dependencies
-        working-directory: mobile-gateway
-        run: npm ci
-
-      - name: Run unit tests
-        working-directory: mobile-gateway
-        run: npm test
-
-      - name: Build mobile gateway
-        working-directory: mobile-gateway
-        run: npm run build
-
-      - name: Build Docker image
-        working-directory: mobile-gateway
-        run: docker build -t inventory/mobile-gateway:latest .
-
-
-  # ── Angular web-app ──────────────────────────────────────────────────────
-  test-web-app:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: web-app/inventory-system-frontend/package-lock.json
-
-      - name: Install dependencies
-        working-directory: web-app/inventory-system-frontend
-        run: npm ci
-
-      - name: Run unit tests
-        working-directory: web-app/inventory-system-frontend
-        run: npm test
-
-      - name: Build production bundle
-        working-directory: web-app/inventory-system-frontend
-        run: npm run build
-
-  # ── Micro-frontends ───────────────────────────────────────────────────────
-  build-mf-shell:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: micro-frontends/shell/package-lock.json
-      - name: Install dependencies
-        working-directory: micro-frontends/shell
-        run: npm ci
-      - name: Run unit tests
-        working-directory: micro-frontends/shell
-        run: npm test
-      - name: Build
-        working-directory: micro-frontends/shell
-        run: npm run build
-      - name: Build Docker image
-        working-directory: micro-frontends/shell
-        run: docker build -t inventory/mf-shell:latest .
-
-  build-mf-auth:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: micro-frontends/auth-mf/package-lock.json
-      - name: Install dependencies
-        working-directory: micro-frontends/auth-mf
-        run: npm ci
-      - name: Run unit tests
-        working-directory: micro-frontends/auth-mf
-        run: npm test
-      - name: Build
-        working-directory: micro-frontends/auth-mf
-        run: npm run build
-      - name: Build Docker image
-        working-directory: micro-frontends/auth-mf
-        run: docker build -t inventory/mf-auth:latest .
-
-  build-mf-warehouses:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: micro-frontends/warehouses-mf/package-lock.json
-      - name: Install dependencies
-        working-directory: micro-frontends/warehouses-mf
-        run: npm ci
-      - name: Run unit tests
-        working-directory: micro-frontends/warehouses-mf
-        run: npm test
-      - name: Build
-        working-directory: micro-frontends/warehouses-mf
-        run: npm run build
-      - name: Build Docker image
-        working-directory: micro-frontends/warehouses-mf
-        run: docker build -t inventory/mf-warehouses:latest .
-
-  build-mf-inventory:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: micro-frontends/inventory-mf/package-lock.json
-      - name: Install dependencies
-        working-directory: micro-frontends/inventory-mf
-        run: npm ci
-      - name: Run unit tests
-        working-directory: micro-frontends/inventory-mf
-        run: npm test
-      - name: Build
-        working-directory: micro-frontends/inventory-mf
-        run: npm run build
-      - name: Build Docker image
-        working-directory: micro-frontends/inventory-mf
-        run: docker build -t inventory/mf-inventory:latest .
-
-  build-mf-orders:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: micro-frontends/orders-mf/package-lock.json
-      - name: Install dependencies
-        working-directory: micro-frontends/orders-mf
-        run: npm ci
-      - name: Run unit tests
-        working-directory: micro-frontends/orders-mf
-        run: npm test
-      - name: Build
-        working-directory: micro-frontends/orders-mf
-        run: npm run build
-      - name: Build Docker image
-        working-directory: micro-frontends/orders-mf
-        run: docker build -t inventory/mf-orders:latest .
-
-  build-mf-companies:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: micro-frontends/companies-mf/package-lock.json
-      - name: Install dependencies
-        working-directory: micro-frontends/companies-mf
-        run: npm ci
-      - name: Run unit tests
-        working-directory: micro-frontends/companies-mf
-        run: npm test
-      - name: Build
-        working-directory: micro-frontends/companies-mf
-        run: npm run build
-      - name: Build Docker image
-        working-directory: micro-frontends/companies-mf
-        run: docker build -t inventory/mf-companies:latest .
-
-  build-mf-fleet:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: micro-frontends/fleet-mf/package-lock.json
-      - name: Install dependencies
-        working-directory: micro-frontends/fleet-mf
-        run: npm ci
-      - name: Run unit tests
-        working-directory: micro-frontends/fleet-mf
-        run: npm test
-      - name: Build
-        working-directory: micro-frontends/fleet-mf
-        run: npm run build
-      - name: Build Docker image
-        working-directory: micro-frontends/fleet-mf
-        run: docker build -t inventory/mf-fleet:latest .
-
-  build-mf-products:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: micro-frontends/products-mf/package-lock.json
-      - name: Install dependencies
-        working-directory: micro-frontends/products-mf
-        run: npm ci
-      - name: Run unit tests
-        working-directory: micro-frontends/products-mf
-        run: npm test
-      - name: Build
-        working-directory: micro-frontends/products-mf
-        run: npm run build
-      - name: Build Docker image
-        working-directory: micro-frontends/products-mf
-        run: docker build -t inventory/mf-products:latest .
+      - name: Build combined web image (same as OpenShift)
+        working-directory: frontend
+        run: docker build -f web/Dockerfile.openshift -t inventory/web-frontend:latest .
 
   # ── End-to-end (Playwright) ──────────────────────────────────────────────
-  # Manual-only. The compose.yaml bundles only DBs, Kafka, gateways and the
-  # frontend MFs — the Java/.NET backend services are run from the IDE on the
-  # host, so the gateway returns 504 in CI when it tries to proxy to them.
-  # Trigger from the Actions tab when running against an env where the full
-  # backend is up (or extend compose.yaml to include the missing services).
+  # Manual-only. deploy/docker/compose.yaml bundles only DBs, Kafka, gateways and the
+  # frontend; the Java/.NET backend services are not in it, so the gateway returns 504
+  # when it tries to proxy to them. Trigger from the Actions tab against an environment
+  # where the full backend is up (or extend the compose file with the missing services).
   e2e:
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    needs:
-      - build-auth-microservice
-      - build-company-microservice
-      - build-warehouse-microservice
-      - build-inventory-microservice
-      - build-fleet-microservice
-      - build-product-microservice
-      - build-order-microservice
-      - build-notification-microservice
-      - build-mobile-gateway
+    needs: [java, dotnet, node]
     steps:
       - uses: actions/checkout@v4
 
@@ -510,18 +171,18 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
-          cache-dependency-path: e2e/package-lock.json
+          cache-dependency-path: tests/e2e/package-lock.json
 
       - name: Install Playwright dependencies
-        working-directory: e2e
+        working-directory: tests/e2e
         run: npm install
 
       - name: Install browsers
-        working-directory: e2e
+        working-directory: tests/e2e
         run: npx playwright install --with-deps chromium
 
       - name: Start backend stack
-        run: docker compose up -d
+        run: docker compose -f deploy/docker/compose.yaml up -d
         env:
           DB_USER: administrator
           DB_PASSWORD: ci-test-password
@@ -536,11 +197,11 @@ jobs:
             sleep 2
           done
           echo "Gateway never came up — dumping logs"
-          docker compose logs
+          docker compose -f deploy/docker/compose.yaml logs
           exit 1
 
       - name: Run Playwright tests
-        working-directory: e2e
+        working-directory: tests/e2e
         run: npm test
         env:
           E2E_BASE_URL: http://localhost:8090
@@ -550,12 +211,12 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: playwright-report
-          path: e2e/playwright-report
+          path: tests/e2e/playwright-report
           retention-days: 7
 
       - name: Tear down stack
         if: always()
-        run: docker compose down -v
+        run: docker compose -f deploy/docker/compose.yaml down -v
         env:
           DB_USER: administrator
           DB_PASSWORD: ci-test-password

@@ -1,8 +1,11 @@
 # CI/CD setup
 
-`workflows/images.yml` builds + pushes every container image (18 total) to
-Docker Hub on every push to `main`. Used by the OpenShift deployment flow
-in `pocket-logistics-pro-expo/naloga8-guidelines.md`.
+`workflows/images.yml` builds + pushes every container image (12 total: 9 services, 2 gateways,
+1 combined web frontend) to Docker Hub on every push to `main`. Used by the
+OpenShift deployment flow in `deploy/openshift/` (see `frontend/mobile/naloga8-guidelines.md`).
+
+`workflows/ci.yml` builds and tests every backend service, both gateways and the
+frontend workspace on every push/PR; the Playwright e2e job is manual-only.
 
 ## One-time setup
 
@@ -24,10 +27,10 @@ in `pocket-logistics-pro-expo/naloga8-guidelines.md`.
 
 ## What it does on push
 
-For every push to `main` that touches `services/**`, `mobile-gateway/**`,
-`gateway-service/**`, or `micro-frontends/**`:
+For every push to `main` that touches `backend/services/**`, `backend/gateways/**`,
+`frontend/web/**`, `frontend/packages/**` or `frontend/package*.json`:
 
-- 18 parallel matrix jobs build each image with Buildx (linux/amd64 target).
+- 12 parallel matrix jobs build each image with Buildx (linux/amd64 target).
 - Each image is pushed with three tags:
   - `latest`           — always overwritten with the newest main build
   - `<short-sha>`      — immutable, e.g. `a1b2c3d` — **use this in OpenShift Deployments**
@@ -43,14 +46,13 @@ making a commit.
 
 ## Cost / minutes note
 
-A full rebuild of all 18 components takes ~12–15 GitHub-minutes when caches
+A full rebuild of all 12 components takes ~12–15 GitHub-minutes when caches
 are cold and ~4–6 minutes with the buildx GHA cache populated. Free tier
 gives you 2000 minutes/month for private repos and unlimited for public —
 plenty of headroom for thesis-pace iteration.
 
-## Mobile repo
+## Mobile app
 
-The mobile project (`erp-mobile-lovable/pocket-logistics-pro-expo`) has its
-own workflow at `.github/workflows/ci.yml` that runs `tsc --noEmit` + `npm test`
-on every push/PR. No registry credentials needed there — the mobile app is
-distributed via Expo, not as a container image.
+The Expo app lives in `frontend/mobile` and its tests run in the `frontend` job of
+`ci.yml`. It is distributed via Expo, not as a container image. (The standalone
+`Expo-Erp-System` repo is an older copy of this app.)

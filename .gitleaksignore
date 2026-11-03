@@ -1,0 +1,11 @@
+# Known findings: the shared development JWT secret (review finding R03), already public in history.
+# Phase 3 (feat/asymmetric-jwt) removes it from the code and rotates every deployed value.
+# Only these exact commit:file:rule:line fingerprints are ignored. Any new secret fails CI.
+34c31ba3f66ea5b0882103a299701f48f786dc84:frontend/mobile/naloga8-guidelines.md:generic-api-key:295
+34c31ba3f66ea5b0882103a299701f48f786dc84:frontend/mobile/naloga8-guidelines.md:generic-api-key:303
+34c31ba3f66ea5b0882103a299701f48f786dc84:frontend/mobile/naloga8-guidelines.md:generic-api-key:313
+56aab7590d5dbe416ddd2caadcd402d923a6fa5f:openshift/manifests/00-config.yaml:generic-api-key:41
+3af1fa36176856bec1559a901144f5ca1ef885e9:services/auth-service/src/test/resources/application.properties:generic-api-key:13
+8a0872a8e3bc7e106e1754d7bf377e59094b6fdc:services/auth-service/src/main/resources/application-dev.yaml:generic-api-key:18
+f9d291a3d2f26d69d2717aa1c918036f64b060fe:gateway-service/src/main/java/com/marko/logistics/gateway/service/JwtService.java:generic-api-key:12
+f9d291a3d2f26d69d2717aa1c918036f64b060fe:services/auth-service/src/main/java/com/marko/logistics/auth/infrastructure/security/JwtService.java:generic-api-key:21

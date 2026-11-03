@@ -1,0 +1,86 @@
+# Frontend npm workspace: web shell + 7 remotes, shared packages and the Expo app.
+name: frontend
+
+on:
+  push:
+    branches: [main]
+    paths: &paths
+      - frontend/**
+      - .nvmrc
+      - .trivyignore
+      - .github/workflows/frontend.yml
+  pull_request:
+    paths: *paths
+
+permissions:
+  contents: read
+
+concurrency:
+  group: frontend-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  SEMGREP_IMAGE: semgrep/semgrep:1.180.0@sha256:529ee8a277ec8adc5b534d7c74eea0a47e9de21d62852b6ba7ac6ba9566845c3
+  TRIVY_IMAGE: aquasec/trivy:0.76.0@sha256:2416d1f74045b57274df1a340eee6b510cacd73c66a6ccb8da092b117eb7d222
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install workspace (exact versions)
+        run: npm ci --no-audit --no-fund
+
+      - name: Typecheck web apps, shared packages and mobile
+        run: |
+          for w in web/*/ packages/*/ mobile/; do
+            [ -f "$w/tsconfig.json" ] || continue
+            echo "::group::tsc $w"; npx tsc --noEmit -p "$w"; echo "::endgroup::"
+          done
+
+      - name: Lint mobile
+        run: npm run lint --workspace=@erp/mobile
+
+      - name: Unit tests (every workspace)
+        run: npm test --workspaces --if-present
+
+      - name: Build web apps
+        run: npm run build --workspaces --if-present
+
+      - name: Dependency audit (production, critical fails)
+        run: npm audit --omit=dev --audit-level=critical
+
+      - name: SAST (Semgrep)
+        working-directory: .
+        run: |
+          # npm-missing-minimum-release-age: excluded until the npm in use supports the setting
+          # (tracked in BACKLOG.md, "Platform"); everything else in these packs fails the build.
+          docker run --rm -v "$PWD:/src:ro" -w /src "$SEMGREP_IMAGE" \
+            semgrep scan --metrics=off --error \
+            --config p/javascript --config p/typescript --config p/react --config p/nginx \
+            --config p/dockerfile --config p/secrets --config p/owasp-top-ten \
+            --exclude-rule package_managers.npm.npm-missing-minimum-release-age.npm-missing-minimum-release-age \
+            frontend
+
+      - name: Build web image
+        run: docker build -f web/Dockerfile -t web-frontend:ci .
+
+      - name: Image scan (Trivy)
+        working-directory: .
+        run: |
+          trivy() { docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v "$PWD:/src:ro" "$TRIVY_IMAGE" "$@"; }
+          trivy image --quiet --scanners vuln,secret --severity HIGH,CRITICAL --ignorefile /src/.trivyignore web-frontend:ci
+          trivy image --quiet --scanners vuln,secret --severity CRITICAL --ignore-unfixed --exit-code 1 --ignorefile /src/.trivyignore web-frontend:ci

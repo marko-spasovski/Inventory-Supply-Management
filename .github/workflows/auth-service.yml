@@ -1,0 +1,26 @@
+name: auth-service
+
+on:
+  push:
+    branches: [main]
+    paths: &paths
+      - backend/services/auth-service/**
+      - .trivyignore
+      - .github/workflows/auth-service.yml
+      - .github/workflows/_java-service.yml
+  pull_request:
+    paths: *paths
+
+permissions:
+  contents: read
+
+concurrency:
+  group: auth-service-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    uses: ./.github/workflows/_java-service.yml
+    with:
+      service: auth-service
+      path: backend/services/auth-service

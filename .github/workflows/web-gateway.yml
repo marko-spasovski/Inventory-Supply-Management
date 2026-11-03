@@ -1,0 +1,26 @@
+name: web-gateway
+
+on:
+  push:
+    branches: [main]
+    paths: &paths
+      - backend/gateways/web-gateway/**
+      - .trivyignore
+      - .github/workflows/web-gateway.yml
+      - .github/workflows/_java-service.yml
+  pull_request:
+    paths: *paths
+
+permissions:
+  contents: read
+
+concurrency:
+  group: web-gateway-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    uses: ./.github/workflows/_java-service.yml
+    with:
+      service: web-gateway
+      path: backend/gateways/web-gateway

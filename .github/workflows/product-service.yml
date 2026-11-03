@@ -1,0 +1,27 @@
+name: product-service
+
+on:
+  push:
+    branches: [main]
+    paths: &paths
+      - backend/services/product-service/**
+      - .trivyignore
+      - .github/workflows/product-service.yml
+      - .github/workflows/_dotnet-service.yml
+  pull_request:
+    paths: *paths
+
+permissions:
+  contents: read
+
+concurrency:
+  group: product-service-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    uses: ./.github/workflows/_dotnet-service.yml
+    with:
+      service: product-service
+      path: backend/services/product-service
+      test-project: product-service.Tests/product-service.Tests.csproj

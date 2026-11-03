@@ -1,0 +1,28 @@
+# Feature Matrix — Pocket Logistics Pro
+
+> **Sources:**
+> - Backend support: read from @RestController / Controllers, DTOs, SecurityConfig, mobile-gateway routes
+> - Web app support: inferred from micro-frontend names and web-app navigation (Dashboard, Warehouses, Products, Stock, Orders, Companies, Vehicles, Drivers, Settings)
+> - Mobile-gateway exposes it: verified against `mobile-gateway/src/routes/*`
+
+| # | Feature | Backend support today | Web app support today | Mobile-gateway exposes it? | Mobile plan — this pass | Mobile plan — future |
+|---|---------|----------------------|-----------------------|---------------------------|------------------------|----------------------|
+| 1 | **Auth + authorization (JWT, roles)** | **Partial** — JWT HS256 issued; only 2 of 4 spec roles exist (MANAGER, WORKER); no refresh endpoint; no ADMIN; no DRIVER | Full (login, register, role-protected routes) | **Yes** — `/auth/login`, `/auth/register`, `/auth/logout`, `/auth/refresh` (proxy exists; backend 404s on refresh) | **Built** — login, register, logout, JWT decode, role extraction, auth guard | Add ADMIN + DRIVER roles to auth-service; implement refresh endpoint |
+| 2 | **Products (CRUD + categories)** | **Full** — ProductController: GET/POST/PUT/DELETE `/products`, GET `/products/{id}`, CategoryController: GET/POST `/categories` | Full (products-mf micro-frontend) | **Yes** — all CRUD; write ops gated to MANAGER | **Shell** — list products + list categories; MANAGER can create/edit/delete | Barcode lookup by SKU (see Gap 5); image upload |
+| 3 | **Warehouses (CRUD + capacity)** | **Full** — WarehouseController: GET/POST/PUT/DELETE `/warehouses`, GET `/warehouses/total`; capacity tracked via `usedCapacity` / `totalCapacity` | Full (warehouses-mf) | **Yes** — all CRUD; `/warehouses/summary` rewrites to `/warehouses/total`; write ops MANAGER-only | **Built** (representative feature) — list, detail, create (MANAGER) | Capacity utilization chart; capacity threshold alerts |
+| 4 | **Inventory (real-time stock per warehouse, min/max thresholds)** | **Partial** — InventoryController: GET `/inventory`, GET `/inventory/{warehouseId}`, POST `/inventory` (add stock); no min/max threshold fields in InventoryResponse; no reduce-stock HTTP endpoint (only via gRPC from order-service) | Full (inventory-mf) | **Yes** — as `/stock/*` (path rewritten); GET + POST exposed | **Built** (representative feature) — list all stock, filter by warehouse, add stock | Min/max threshold fields (requires backend extension); low-stock filter; reduce-stock endpoint |
+| 5 | **Orders (CRUD + status flow + driver assignment + line items)** | **Partial** — OrdersController: GET `/orders`, POST `/orders`, PUT `/orders/status`; status enum: Requested→Approved→Delivered→Closed; no GET by ID; no DELETE; single product per order (no line items); driver assigned via `DriverId` field | Full (orders-mf) | **Yes** — GET, POST, PUT `/:id/status` (with mobile URL rewriting), POST `/upload-document` | **Built** (representative feature) — list, create, update status | GET by ID; DELETE; line items (multiple products per order); document upload UI |
+| 6 | **Real-time notifications (WebSocket)** | **Full** — notification-service WS on :9091; broadcasts order.created, order.status.changed, inventory.low, inventory.out, warehouse.capacity events from Kafka | Full (notifications panel in web app) | **Partial** — HTTP notification history/read endpoints exposed at `/notifications`; WS is direct to :9091 (mobile-gateway does not proxy WS) | **Shell** — notifications list screen with polling fallback; WS client wired but requires direct :9091 connection | WS in-app connection with JWT; push notifications via expo-notifications + APNS/FCM |
+| 7 | **Barcode scanner (camera-based, identify product)** | **None** — no `/products/by-barcode` or `/products/by-sku` endpoint; SKU field exists on Product entity but no lookup route | None | **No — not exposed anywhere** | **Shell** — scanner screen with camera permission flow; "Feature pending backend" empty state | Add GET `/products/by-sku?sku=X` to product-service + expose in mobile-gateway |
+| 8 | **Offline mode + sync** | **N/A (client-only feature)** | None (web app is online-only) | N/A | **Partial shell** — React Query cache provides offline reads automatically; offline banner UI; mutations blocked when offline | Full offline write queue with expo-sqlite + outbox model (see ARCHITECTURE_FUTURE.md) |
+| 9 | **Fleet (Vehicles + Drivers, assignment to orders)** | **Full** — DriverController + VehicleController: full CRUD for both; Driver entity has: Name, Phone, Email, VehicleId, CompanyId; order has DriverId field for assignment | Full (fleet-mf: Vehicles + Drivers) | **Yes** — all CRUD for `/drivers` and `/vehicles`; write ops MANAGER-only | **Shell** — list drivers, list vehicles; MANAGER can create/edit/delete | Driver self-view (requires DRIVER role); vehicle tracking; assignment from order creation screen |
+| 10 | **AI analysis (inventory summaries, low-stock alerts, one-tap reorder)** | **None** — no `/ai/*` routes exist anywhere | None | **No — not exposed anywhere** | **Shell** — AI screen with "AI analysis not yet available" placeholder state; wired to hypothetical `GET /ai/inventory-summary` | Design and implement AI service; wire to real endpoint; streaming response support |
+
+---
+
+## Summary
+
+- **Built this pass (fully wired):** Auth, Stock/Inventory, Orders
+- **Built this pass (shell):** Warehouses (as representative), Fleet, Notifications, Scanner, Offline banner, AI screen
+- **Not exposed anywhere:** Barcode lookup, AI endpoints
+- **Critical backend gaps:** No refresh token, only 2 of 4 roles, no barcode endpoint, no AI service

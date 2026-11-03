@@ -1,0 +1,10 @@
+{
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@erp/api-types": ["packages/api-types/src"],
+      "@erp/i18n": ["packages/i18n/src"],
+      "@erp/domain": ["packages/domain/src"]
+    }
+  }
+}

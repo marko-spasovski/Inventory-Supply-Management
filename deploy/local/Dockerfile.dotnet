@@ -1,0 +1,15 @@
+# Fallback when the host has no .NET 9 SDK. Build context: project root.
+FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
+ARG SERVICE
+WORKDIR /src
+COPY backend/services/${SERVICE}/ ./
+# The checked-in global.json pins 9.0.0. Use the SDK in this 9.0 image;
+# this removes only the container's copy, never the host's source file.
+RUN rm -f global.json && dotnet publish "${SERVICE}.csproj" -c Release -o /out
+
+FROM mcr.microsoft.com/dotnet/aspnet:9.0
+ARG SERVICE
+ENV SERVICE_DLL=${SERVICE}.dll
+WORKDIR /app
+COPY --from=build /out/ ./
+ENTRYPOINT ["sh", "-c", "exec dotnet \"$SERVICE_DLL\""]

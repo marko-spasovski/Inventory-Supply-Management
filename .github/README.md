@@ -1,58 +1,34 @@
-# CI/CD setup
+# CI
 
-`workflows/images.yml` builds + pushes every container image (12 total: 9 services, 2 gateways,
-1 combined web frontend) to Docker Hub on every push to `main`. Used by the
-OpenShift deployment flow in `deploy/openshift/` (see `frontend/mobile/naloga8-guidelines.md`).
+Every workflow follows the same rules (docs/architecture.md, "Pipeline"):
 
-`workflows/ci.yml` builds and tests every backend service, both gateways and the
-frontend workspace on every push/PR; the Playwright e2e job is manual-only.
+- GitHub's own actions only, pinned to a commit SHA. Scanners run as Docker images pinned by digest.
+- `permissions: contents: read` everywhere; no secrets are needed to test a PR.
+- Workflow inputs reach shell scripts only through environment variables, never as `${{ }}` inside `run:`.
+- A service's workflow runs only when that service (or its pipeline, or `.trivyignore`) changes.
 
-## One-time setup
+## Workflows
 
-1. **Create a Docker Hub access token**
-   <https://hub.docker.com/settings/security> → New Access Token → name it
-   `gh-actions` → copy the token (you won't see it again).
+| File | Runs when | What it does |
+|---|---|---|
+| `_java-service.yml` | called | `./mvnw verify` (unit + integration tests), Semgrep, image build, Trivy image and Dockerfile scans |
+| `_dotnet-service.yml` | called | `dotnet restore/build/test`, Semgrep, image build, Trivy |
+| `_node-service.yml` | called | `npm ci --ignore-scripts`, `tsc --noEmit`, lint, test, build, `npm audit`, Semgrep, image build, Trivy |
+| `auth-service.yml`, `company-service.yml`, `warehouse-service.yml`, `inventory-service.yml`, `web-gateway.yml` | that folder changes | `_java-service.yml` |
+| `fleet-service.yml`, `product-service.yml`, `order-service.yml` | that folder changes | `_dotnet-service.yml` |
+| `notification-service.yml`, `ai-service.yml`, `mobile-gateway.yml` | that folder changes | `_node-service.yml` |
+| `frontend.yml` | `frontend/**` changes | typecheck (web, packages, mobile), mobile lint, all workspace tests, web builds, audit, Semgrep, web image, Trivy |
+| `repo-checks.yml` | every PR and push to main | gitleaks over the full history, actionlint, launcher tests |
 
-2. **Add two repository secrets**
-   GitHub repo → **Settings → Secrets and variables → Actions → New repository secret**:
-   - `DOCKERHUB_USERNAME` → your Docker Hub username (e.g. `marko`)
-   - `DOCKERHUB_TOKEN`    → the access token from step 1
+Later phases add `e2e.yml` (the full stack in kind, Playwright) and `release.yml` (GHCR images by digest,
+gated deploy to the VPS); see docs/plans/remediation-plan.md.
 
-3. **Make sure Docker Hub repos exist + are public.**
-   The workflow pushes to `docker.io/<DOCKERHUB_USERNAME>/<image-name>`.
-   First push auto-creates each repo as **private** by default. Either
-   pre-create them as Public on Docker Hub, or open each one after the
-   first push and flip Visibility to Public. OpenShift Sandbox needs them
-   public to pull without an imagePullSecret.
+## Gates and accepted exceptions
 
-## What it does on push
-
-For every push to `main` that touches `backend/services/**`, `backend/gateways/**`,
-`frontend/web/**`, `frontend/packages/**` or `frontend/package*.json`:
-
-- 12 parallel matrix jobs build each image with Buildx (linux/amd64 target).
-- Each image is pushed with three tags:
-  - `latest`           — always overwritten with the newest main build
-  - `<short-sha>`      — immutable, e.g. `a1b2c3d` — **use this in OpenShift Deployments**
-  - `<branch>`         — convenient for short-lived feature branches
-- A summary table appears under the workflow run's **Summary** tab with
-  ready-to-paste `docker.io/<user>/<service>:<sha>` references.
-
-## Manual trigger
-
-You can also fire it from **Actions → build-images → Run workflow** any
-time — useful after rotating the Docker Hub token, or to rebuild without
-making a commit.
-
-## Cost / minutes note
-
-A full rebuild of all 12 components takes ~12–15 GitHub-minutes when caches
-are cold and ~4–6 minutes with the buildx GHA cache populated. Free tier
-gives you 2000 minutes/month for private repos and unlimited for public —
-plenty of headroom for thesis-pace iteration.
-
-## Mobile app
-
-The Expo app lives in `frontend/mobile` and its tests run in the `frontend` job of
-`ci.yml`. It is distributed via Expo, not as a container image. (The standalone
-`Expo-Erp-System` repo is an older copy of this app.)
+| Gate | Fails on | Exceptions |
+|---|---|---|
+| Tests | any failing test | quarantined tests use `Skip` with a reason and are listed in docs/testing/baseline.md |
+| Semgrep | any finding in the listed rule packs | `nosemgrep` with a reason on the exact line; rule exclusions are named in the workflow |
+| Trivy image | a CRITICAL vulnerability that has a fix | `.trivyignore`: one line per CVE, with the reason and an expiry date |
+| npm audit | a critical advisory in production dependencies | none |
+| gitleaks | any secret in any commit | `.gitleaksignore`: fingerprints of the known, already-public development secret (rotated in phase 3) |

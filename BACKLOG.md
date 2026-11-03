@@ -17,6 +17,13 @@ Ideas and later work. Not built until picked up. The current programme is
 - Driver navigation link from the order's warehouse address.
 
 ## Platform
+- Spring Boot 4 / Spring Framework 7 for the five Spring apps is **planned** (phase 1, `chore/spring-boot-4`);
+  it removes the `.trivyignore` exceptions for spring-webmvc/webflux.
+- Expo SDK upgrade: the remaining HIGH npm advisories (expo-router, query-string, postcss, image-size)
+  come through the Expo 54 toolchain.
+- `.npmrc` `min-release-age` (supply-chain delay for new packages) once the npm version in use supports it;
+  until then the Semgrep rule is excluded in `frontend.yml`.
+- Content-Security-Policy for the web image, verified by the browser e2e tests (phase 6).
 - Pagination on every list endpoint (requirements: lists are paginated before data grows).
 - Prometheus + Grafana on the VPS if RAM allows; until then metrics-server and an uptime checker.
 - S3-compatible object storage for documents if order-service needs more than one replica (ADR 009).

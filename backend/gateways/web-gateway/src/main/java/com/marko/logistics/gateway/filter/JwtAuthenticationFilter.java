@@ -38,7 +38,15 @@ public class JwtAuthenticationFilter implements GlobalFilter {
         String path = exchange.getRequest().getURI().getPath();
 
         if (!routeValidator.isSecured(path)) {
-            return chain.filter(exchange);
+            // Public routes (login, register): identity headers may only come from this gateway.
+            ServerWebExchange cleaned = exchange.mutate()
+                    .request(req -> req.headers(h -> {
+                        h.remove("X-User-Id");
+                        h.remove("X-User-Email");
+                        h.remove("X-User-Role");
+                    }))
+                    .build();
+            return chain.filter(cleaned);
         }
 
         String token = extractToken(exchange);

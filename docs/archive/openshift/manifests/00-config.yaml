@@ -38,4 +38,4 @@ stringData:
   DB_USER: "administrator"
   DB_PASSWORD: "administrator123"
   # Must match the HMAC secret auth-service signs JWTs with.
-  JWT_SECRET: "ewzqAN2z1bq7yYFcN3/KId4wbohavFXxHE7nnr82lZE="
+  JWT_SECRET: "<set-me>"

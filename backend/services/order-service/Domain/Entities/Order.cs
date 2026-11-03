@@ -28,8 +28,24 @@ public class Order : BaseEntity
 
     }
     
+    // Allowed transitions (docs/requirements.md, "Supply order lifecycle"). Repeating a transition,
+    // such as approving an approved order, is refused like any other invalid change (finding R04).
+    private static readonly Dictionary<Status, Status[]> AllowedTransitions = new()
+    {
+        [Status.Requested] = [Status.Approved, Status.Rejected],
+        [Status.Approved]  = [Status.Delivered],
+        [Status.Delivered] = [Status.Closed],
+        [Status.Closed]    = [],
+        [Status.Rejected]  = [],
+    };
+
+    public static bool CanTransition(Status from, Status to) =>
+        AllowedTransitions.TryGetValue(from, out var next) && next.Contains(to);
+
     public void UpdateStatus(Status newStatus)
     {
+        if (!CanTransition(Status, newStatus))
+            throw new order_service.Domain.Exceptions.InvalidStatusTransitionException(Status.ToString(), newStatus.ToString());
         Status = newStatus;
     }
     

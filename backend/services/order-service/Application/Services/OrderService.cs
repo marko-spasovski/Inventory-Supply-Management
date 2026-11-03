@@ -37,28 +37,28 @@ public class OrderService : IOrderService
         if (order == null)
         {
             _logger.LogWarning("Order not found: orderId={OrderId}", orderId);
-            throw new Exception("Order not found");
+            throw new order_service.Domain.Exceptions.OrderNotFoundException(orderId);
         }
 
         var oldStatus = order.Status.ToString();
 
+        // Throws InvalidStatusTransitionException for a change the state machine does not allow,
+        // so a repeated request can never repeat its side effect (R04).
         order.UpdateStatus(status);
-        await _repository.UpdateAsync(order);
 
-        _logger.LogInformation("Order {OrderId} status updated to {Status}", orderId, status);
-
-        // Capacity is reserved on approval (not on close): once a manager
-        // approves an order, the warehouse must immediately reflect the
-        // committed quantity — even if it pushes usedCapacity over total.
-        if (status == Status.Approved)
+        // Closing is the goods receipt (decision D1, ADR 007): stock is added once, when the delivered
+        // goods are received. The gRPC call runs before the order is saved and must succeed (R05);
+        // if inventory-service fails, the order stays Delivered and the caller can retry.
+        if (status == Status.Closed)
         {
-            _logger.LogInformation("Order {OrderId} approved — sending inventory update via gRPC: productId={ProductId}, warehouseId={WarehouseId}, quantity={Quantity}",
+            _logger.LogInformation("Order {OrderId} closed — receiving stock via gRPC: productId={ProductId}, warehouseId={WarehouseId}, quantity={Quantity}",
                 orderId, order.ProductId, order.WarehouseId, order.Quantity);
 
             await _inventoryClient.SendInventoryAsync(order.ProductId, order.WarehouseId, order.Quantity);
-
-            _logger.LogInformation("Inventory gRPC call completed for order {OrderId}", orderId);
         }
+
+        await _repository.UpdateAsync(order);
+        _logger.LogInformation("Order {OrderId} status updated to {Status}", orderId, status);
 
         // ── Publish to Kafka ──────────────────────────────────────────────
         await _kafkaProducer.PublishOrderStatusChangedAsync(new OrderStatusChangedEvent

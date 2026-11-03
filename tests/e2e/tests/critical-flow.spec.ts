@@ -24,11 +24,16 @@ import { test, expect, APIRequestContext } from '@playwright/test';
 
 const uniqueEmail = () => `e2e-${Date.now()}-${Math.random().toString(36).slice(2, 7)}@example.com`;
 
-async function register(api: APIRequestContext, email: string, password: string) {
+// The bootstrap admin from docker-compose.yml (public registration only creates WORKERs, R01).
+const ADMIN_EMAIL = process.env['E2E_ADMIN_EMAIL'] ?? 'admin@novo.local';
+const ADMIN_PASSWORD = process.env['E2E_ADMIN_PASSWORD'] ?? 'admin-local-only';
+
+async function register(api: APIRequestContext, email: string, password: string, role: string) {
   const res = await api.post('/auth/register', {
-    data: { name: 'E2E User', email, password, role: 'manager' },
+    data: { name: 'E2E User', email, password, role },
   });
   expect(res.status(), `register: ${await res.text()}`).toBe(201);
+  return res.json() as Promise<{ role: string }>;
 }
 
 async function login(api: APIRequestContext, email: string, password: string): Promise<string> {
@@ -39,18 +44,18 @@ async function login(api: APIRequestContext, email: string, password: string): P
   return token;
 }
 
-test.describe('Critical flow: register → login → stock CRUD', () => {
-  test('manager onboards a warehouse, a product, and stock', async ({ request }) => {
-    const email = uniqueEmail();
-    const password = 'Sup3rSecret!';
+test.describe('Registration (R01)', () => {
+  test('asking for ADMIN through public registration still creates a WORKER', async ({ request }) => {
+    const user = await register(request, uniqueEmail(), 'Sup3rSecret!', 'admin');
+    expect(user.role).toBe('WORKER');
+  });
+});
 
-    await test.step('register a fresh manager', async () => {
-      await register(request, email, password);
-    });
-
+test.describe('Critical flow: login → stock CRUD', () => {
+  test('admin onboards a warehouse, a product, and stock', async ({ request }) => {
     let token: string;
-    await test.step('log in and capture JWT', async () => {
-      token = await login(request, email, password);
+    await test.step('log in as the bootstrap admin and capture JWT', async () => {
+      token = await login(request, ADMIN_EMAIL, ADMIN_PASSWORD);
     });
 
     const authHeaders = { Authorization: `Bearer ${token!}` };

@@ -48,8 +48,23 @@ public class OrdersController : ControllerBase
     [HttpPut("status")]
     public async Task<IActionResult> UpdateStatus([FromBody] UpdateOrderStatusRequest request)
     {
-        var result = await _service.UpdateStatusAsync(request.OrderId, request.Status);
-        return Ok(result);
+        try
+        {
+            var result = await _service.UpdateStatusAsync(request.OrderId, request.Status);
+            return Ok(result);
+        }
+        catch (order_service.Domain.Exceptions.OrderNotFoundException e)
+        {
+            return NotFound(new { error = "not_found", message = e.Message });
+        }
+        catch (order_service.Domain.Exceptions.InvalidStatusTransitionException e)
+        {
+            return Conflict(new { error = "invalid_transition", message = e.Message });
+        }
+        catch (order_service.Domain.Exceptions.InventoryUnavailableException e)
+        {
+            return StatusCode(503, new { error = "inventory_unavailable", message = e.Message });
+        }
     }
     
     [HttpPost("upload-document")]

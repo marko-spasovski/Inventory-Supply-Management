@@ -62,16 +62,9 @@ public class AuthService implements
             throw new UserAlreadyExistsException(request.email());
         }
 
-        Role role = switch (request.role().toLowerCase()){
-            case "manager" -> Role.MANAGER;
-            case "worker"  -> Role.WORKER;
-            case "admin"   -> Role.ADMIN;
-            case "driver"  -> Role.DRIVER;
-            default -> {
-                log.warn("Register failed - invalid role: {}", request.role());
-                yield Role.WORKER;
-            }
-        };
+        // Public registration always creates a WORKER (finding R01). The requested role is ignored;
+        // privileged roles are created by the bootstrap admin (AdminBootstrap) or an administrator.
+        Role role = Role.WORKER;
 
         User user = User.create(
                 request.email(),
@@ -83,7 +76,7 @@ public class AuthService implements
         User saved = repository.save(user);
         log.info("User registered with ID: {}", saved.getId());
 
-        return AuthMapper.toResponse(user);
+        return AuthMapper.toResponse(saved);
     }
 
     public String generateToken(LoginRequest request){

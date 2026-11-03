@@ -63,3 +63,7 @@ management:
       group:
         readiness:
           include: readinessState
+
+# Shared HS256 signing secret, same value as auth-service (no default: R03).
+jwt:
+  secret: ${JWT_SECRET}

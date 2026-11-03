@@ -10,6 +10,10 @@
 
 name: novo
 
+# Token signing secret shared by auth-service (issuer) and its verifiers. Local-only default;
+# set JWT_SECRET in .env for anything else.
+x-jwt-secret: &jwt-secret ${JWT_SECRET:-local-development-only-signing-secret-0000}
+
 x-java: &java
   restart: unless-stopped
   mem_limit: 512m
@@ -109,6 +113,10 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/users
       SPRING_DATASOURCE_USERNAME: users_svc
       SPRING_DATASOURCE_PASSWORD: ${SERVICE_DB_PASSWORD:-service-local-only}
+      JWT_SECRET: *jwt-secret
+      # Public registration only creates WORKER accounts (R01); this is the first ADMIN.
+      AUTH_BOOTSTRAP_ADMIN_EMAIL: ${AUTH_BOOTSTRAP_ADMIN_EMAIL:-admin@novo.local}
+      AUTH_BOOTSTRAP_ADMIN_PASSWORD: ${AUTH_BOOTSTRAP_ADMIN_PASSWORD:-admin-local-only}
     healthcheck:
       <<: *bash-ready
       test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8081 && printf 'GET /readyz HTTP/1.0\\r\\n\\r\\n' >&3 && head -1 <&3 | grep -q ' 200 '"]
@@ -203,8 +211,7 @@ services:
       DB_USER: notifications_svc
       DB_PASSWORD: ${SERVICE_DB_PASSWORD:-service-local-only}
       KAFKA_BROKERS: kafka:9092
-      # Shared development secret until phase 3 (ES256 + JWKS, ADR 005).
-      JWT_SECRET: ${JWT_SECRET:-ewzqAN2z1bq7yYFcN3/KId4wbohavFXxHE7nnr82lZE=}
+      JWT_SECRET: *jwt-secret
     depends_on:
       postgres: { condition: service_healthy }
       kafka-init: { condition: service_completed_successfully }
@@ -237,6 +244,7 @@ services:
     ports: ["127.0.0.1:8080:8080"]
     environment:
       SPRING_PROFILES_ACTIVE: dev
+      JWT_SECRET: *jwt-secret
       AUTH_SERVICE_URL: http://auth-service:8081
       COMPANY_SERVICE_URL: http://company-service:8082
       FLEET_SERVICE_URL: http://fleet-service:8083
@@ -257,7 +265,7 @@ services:
     ports: ["127.0.0.1:8090:8090"]
     environment:
       PORT: "8090"
-      JWT_SECRET: ${JWT_SECRET:-ewzqAN2z1bq7yYFcN3/KId4wbohavFXxHE7nnr82lZE=}
+      JWT_SECRET: *jwt-secret
       AUTH_SERVICE_URL: http://auth-service:8081
       COMPANY_SERVICE_URL: http://company-service:8082
       FLEET_SERVICE_URL: http://fleet-service:8083

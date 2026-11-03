@@ -1,11 +1,20 @@
 import 'dotenv/config';
 
+// The signing secret shared with auth-service (finding R03: it used to fall back to a value committed
+// in source). Required outside unit tests, where Jest sets NODE_ENV=test.
+function requireJwtSecret(): string {
+  const value = process.env['JWT_SECRET'];
+  if (value && value.length >= 32) return value;
+  if (process.env['NODE_ENV'] === 'test') return 'test-only-signing-secret-not-used-anywhere-else';
+  throw new Error('JWT_SECRET must be set (at least 32 characters)');
+}
+
 export const config = {
   port: parseInt(process.env['PORT'] ?? '8090', 10),
 
   jwt: {
     // Same secret used by auth-service (base64-encoded HMAC key)
-    secret: process.env['JWT_SECRET'] ?? 'ewzqAN2z1bq7yYFcN3/KId4wbohavFXxHE7nnr82lZE=',
+    secret: requireJwtSecret(),
   },
 
   // Downstream microservice URLs

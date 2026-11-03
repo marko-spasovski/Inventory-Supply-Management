@@ -292,7 +292,7 @@ inventory, order, notification, ai):
     NOTIFICATION_SERVICE_URL=http://notification-service:8088
     NOTIFICATION_WS_URL=ws://notification-service:9091
     AI_SERVICE_URL=http://ai-service:8089
-    JWT_SECRET=ewzqAN2z1bq7yYFcN3/KId4wbohavFXxHE7nnr82lZE=
+    JWT_SECRET=<your-secret>
     ```
     **`auth-service`** (Spring profile):
     ```
@@ -300,7 +300,7 @@ inventory, order, notification, ai):
     SPRING_DATASOURCE_URL=jdbc:postgresql://auth-db:5432/users
     SPRING_DATASOURCE_USERNAME=administrator
     SPRING_DATASOURCE_PASSWORD=D31#12Sdea@#123SdZZsdup@3!
-    JWT_SECRET=ewzqAN2z1bq7yYFcN3/KId4wbohavFXxHE7nnr82lZE=
+    JWT_SECRET=<your-secret>
     ```
     Same pattern for the other Java services — swap `auth-db`/`users` for
     `<service>-db`/`<schema>` per §4.2.
@@ -310,7 +310,7 @@ inventory, order, notification, ai):
     PORT=8088
     WS_PORT=9091
     WS_REQUIRE_AUTH=true
-    JWT_SECRET=ewzqAN2z1bq7yYFcN3/KId4wbohavFXxHE7nnr82lZE=
+    JWT_SECRET=<your-secret>
     KAFKA_BROKERS=kafka:9092
     PGHOST=notification-db
     PGPORT=5432

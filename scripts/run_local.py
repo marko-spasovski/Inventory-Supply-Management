@@ -14,6 +14,7 @@ import os
 from pathlib import Path
 import queue
 import re
+import secrets
 import select
 import shutil
 import signal
@@ -160,6 +161,16 @@ class Supervisor:
         for key in list(self.env):
             if key.startswith("COMPOSE_"):
                 del self.env[key]
+
+    def local_jwt_secret(self) -> str:
+        path = self.state / "jwt-secret"
+        if path.is_file() and len(path.read_text().strip()) >= 32:
+            return path.read_text().strip()
+        self.state.mkdir(parents=True, exist_ok=True)
+        value = secrets.token_urlsafe(48)
+        path.write_text(value)
+        path.chmod(0o600)
+        return value
 
     @property
     def compose(self) -> list[str]:
@@ -395,13 +406,10 @@ class Supervisor:
         if occupied:
             raise LaunchError("Ports already in use: " + ", ".join(occupied) +
                               ". Stop the conflicting stack yourself; this launcher will not kill it.")
-        # The web verifier currently embeds its key; use that same development
-        # key for every local consumer instead of accepting mismatched ambient JWT_SECRET.
-        source = self.root / "backend/gateways/web-gateway/src/main/java/com/marko/logistics/gateway/service/JwtService.java"
-        match = re.search(r'SECRET\s*=\s*"([^"]+)"', source.read_text())
-        if not match:
-            raise LaunchError("Web JWT configuration changed. Update the launcher's local auth wiring.")
-        self.env["JWT_SECRET"] = match.group(1)
+        # One signing secret for every local token issuer and verifier. No secret lives in source
+        # code: use JWT_SECRET from the environment, otherwise a random one generated once per
+        # checkout and kept in the (git-ignored) launcher state, so sessions survive restarts.
+        self.env["JWT_SECRET"] = os.environ.get("JWT_SECRET") or self.local_jwt_secret()
         for name, port, _, _ in JAVA + DOTNET:
             self.env[name.replace("-service", "").upper() + "_SERVICE_URL"] = f"http://localhost:{port}"
         self.env.update({

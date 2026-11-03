@@ -38,6 +38,8 @@ connected by gRPC and Kafka, running in Docker and on Kubernetes.
 - [Project status](#project-status)
 - [Repository layout](#repository-layout)
 - [Documentation](#documentation)
+- [Author](#author)
+- [License](#license)
 
 ## What it does
 
@@ -237,3 +239,16 @@ docker-compose.yml the whole stack in containers
 | [docs/PROJECT_REVIEW_AND_DOCUMENTATION.md](docs/PROJECT_REVIEW_AND_DOCUMENTATION.md) | the full technical review (findings R01–R24) |
 | [docs/plans/remediation-plan.md](docs/plans/remediation-plan.md) | the improvement plan this work followed |
 | [AGENTS.md](AGENTS.md) | conventions, commands and rules for contributors |
+
+## Author
+
+**Marko Spasovski**: designed and built as a polyglot microservices project covering service design across
+Java, .NET and Node, micro-frontends, a native mobile app, event-driven integration with Kafka and gRPC, and
+delivery with Docker, Kubernetes and CI quality gates.
+
+[GitHub](https://github.com/marko-spasovski) · [LinkedIn](https://www.linkedin.com/in/marko-spasovski2/)
+
+## License
+
+No license has been chosen yet. Until one is added, all rights are reserved.
+

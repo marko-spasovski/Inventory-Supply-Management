@@ -6,6 +6,8 @@ import App from '../App';
 describe('Auth MF — login form', () => {
   beforeEach(() => {
     localStorage.clear();
+    // Tests assert English copy; the app default is Slovenian (covered in shell i18n tests).
+    localStorage.setItem('erp_locale', 'en');
     vi.restoreAllMocks();
   });
 

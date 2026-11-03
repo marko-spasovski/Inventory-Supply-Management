@@ -17,9 +17,9 @@ describe('Inventory MF', () => {
     }));
   });
 
-  it('renders Stock / Inventory heading', () => {
+  it('renders the Stock heading', () => {
     render(<App />);
-    expect(screen.getByText(/Stock \/ Inventory/i)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: 'Stock' })).toBeInTheDocument();
   });
 
   it('fetches and shows inventory items', async () => {

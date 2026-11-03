@@ -23,7 +23,8 @@ describe('shell Layout', () => {
     renderLayout();
     expect(screen.getByText('Alice')).toBeInTheDocument();
     expect(screen.getByText('a@x.com')).toBeInTheDocument();
-    expect(screen.getByText('MANAGER')).toBeInTheDocument();
+    // The role is shown with its localized label (strings.roles.MANAGER).
+    expect(screen.getByText('Manager')).toBeInTheDocument();
   });
 
   it('renders all 6 nav links', () => {

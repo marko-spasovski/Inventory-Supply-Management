@@ -5,6 +5,8 @@ import App from '../App';
 describe('Products MF', () => {
   beforeEach(() => {
     localStorage.clear();
+    // Tests assert English copy; the app default is Slovenian (covered in shell i18n tests).
+    localStorage.setItem('erp_locale', 'en');
     vi.stubGlobal('fetch', vi.fn().mockImplementation((url: string) => {
       const product = { id: 'p-1', name: 'Widget', sku: 'SKU-1', description: 'd', weight: 1, categoryId: 'cat-1' };
       const category = { id: 'cat-1', name: 'Electronics', description: 'd' };

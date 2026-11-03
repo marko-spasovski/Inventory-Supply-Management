@@ -5,6 +5,8 @@ import App from '../App';
 describe('Orders MF', () => {
   beforeEach(() => {
     localStorage.clear();
+    // Tests assert English copy; the app default is Slovenian (covered in shell i18n tests).
+    localStorage.setItem('erp_locale', 'en');
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
       ok: true,
       json: async () => [

@@ -5,6 +5,8 @@ import App from '../App';
 describe('Fleet MF', () => {
   beforeEach(() => {
     localStorage.clear();
+    // Tests assert English copy; the app default is Slovenian (covered in shell i18n tests).
+    localStorage.setItem('erp_locale', 'en');
     vi.stubGlobal('fetch', vi.fn().mockImplementation((url: string) => {
       const driver = { id: 'd-1', name: 'Alice', phone: '555', email: 'a@x.com', vehicleId: 'v-1', companyId: 'c-1' };
       const vehicle = { id: 'v-1', registrationPlate: 'AB-123' };
@@ -15,9 +17,9 @@ describe('Fleet MF', () => {
     }));
   });
 
-  it('renders Fleet Management heading', () => {
+  it('renders the Fleet heading', () => {
     render(<App />);
-    expect(screen.getByText('Fleet Management')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: 'Fleet' })).toBeInTheDocument();
   });
 
   it('loads drivers and vehicles', async () => {

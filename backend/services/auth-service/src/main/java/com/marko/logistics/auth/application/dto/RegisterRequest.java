@@ -8,5 +8,5 @@ public record RegisterRequest (
     @NotBlank String name,
     @NotBlank @Email String email,
     @NotBlank @Size(min = 6) String password,
-    @NotBlank String role
+    String role // ignored: public registration always creates a WORKER (R01)
 ) {}

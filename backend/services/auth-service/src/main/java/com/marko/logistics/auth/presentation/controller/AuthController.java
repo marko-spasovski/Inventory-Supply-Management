@@ -41,9 +41,10 @@ public class AuthController {
             @Valid @RequestBody LoginRequest request,
             HttpServletResponse response
             ){
+        // Check the password first; tokens are only created for a verified user.
+        AuthResponse userInfo = loginUseCase.login(request);
         String accessToken  = authService.generateToken(request);
         String refreshToken = authService.generateRefreshToken(request);
-        AuthResponse userInfo = loginUseCase.login(request);
 
         response.addHeader(HttpHeaders.SET_COOKIE, buildSessionCookie(accessToken).toString());
         response.setHeader("X-Auth-Token",    accessToken);

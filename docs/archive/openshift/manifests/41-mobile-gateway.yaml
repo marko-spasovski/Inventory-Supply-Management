@@ -1,0 +1,67 @@
+# Express BFF for mobile clients. Exposed publicly via a Route so the Expo app
+# (run separately, outside the cluster) can reach it.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mobile-gateway
+  labels: { app: mobile-gateway }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: mobile-gateway }
+  template:
+    metadata:
+      labels: { app: mobile-gateway }
+    spec:
+      containers:
+        - name: mobile-gateway
+          image: DOCKERHUB_USER/mobile-gateway:latest
+          ports:
+            - containerPort: 8090
+          envFrom:
+            - configMapRef: { name: app-config }
+          env:
+            - name: PORT
+              value: "8090"
+            - name: CORS_ORIGINS
+              value: "*"
+            - name: JWT_SECRET
+              valueFrom: { secretKeyRef: { name: app-secrets, key: JWT_SECRET } }
+          readinessProbe:
+            tcpSocket: { port: 8090 }
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            failureThreshold: 30
+          livenessProbe:
+            tcpSocket: { port: 8090 }
+            initialDelaySeconds: 45
+            periodSeconds: 15
+          resources:
+            requests: { memory: "96Mi", cpu: "50m" }
+            limits:   { memory: "256Mi", cpu: "400m" }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mobile-gateway
+  labels: { app: mobile-gateway }
+spec:
+  selector: { app: mobile-gateway }
+  ports:
+    - port: 8090
+      targetPort: 8090
+---
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: mobile-gateway
+  labels: { app: mobile-gateway }
+spec:
+  to:
+    kind: Service
+    name: mobile-gateway
+  port:
+    targetPort: 8090
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect

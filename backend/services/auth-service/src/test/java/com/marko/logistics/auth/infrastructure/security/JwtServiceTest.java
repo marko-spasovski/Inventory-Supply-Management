@@ -20,7 +20,7 @@ class JwtServiceTest {
     void setUp() {
         jwtService = new JwtService();
         ReflectionTestUtils.setField(jwtService, "secret",
-                "ewzqAN2z1bq7yYFcN3/KId4wbohavFXxHE7nnr82lZE=");
+                "test-only-signing-secret-not-used-anywhere-else");
         ReflectionTestUtils.setField(jwtService, "expirationMs", 3_600_000L);
         ReflectionTestUtils.setField(jwtService, "refreshExpirationMs", 7_200_000L);
 

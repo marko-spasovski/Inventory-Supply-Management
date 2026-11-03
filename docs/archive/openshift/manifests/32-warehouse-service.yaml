@@ -1,0 +1,52 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: warehouse-service
+  labels: { app: warehouse-service }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: warehouse-service }
+  template:
+    metadata:
+      labels: { app: warehouse-service }
+    spec:
+      containers:
+        - name: warehouse-service
+          image: DOCKERHUB_USER/warehouse-service:latest
+          ports:
+            - containerPort: 8084
+          env:
+            - name: SPRING_DATASOURCE_URL
+              value: "jdbc:postgresql://postgres:5432/warehouses"
+            - name: SPRING_DATASOURCE_USERNAME
+              valueFrom: { secretKeyRef: { name: app-secrets, key: DB_USER } }
+            - name: SPRING_DATASOURCE_PASSWORD
+              valueFrom: { secretKeyRef: { name: app-secrets, key: DB_PASSWORD } }
+            - name: SPRING_KAFKA_BOOTSTRAP_SERVERS
+              valueFrom: { configMapKeyRef: { name: app-config, key: KAFKA_BOOTSTRAP_SERVERS } }
+            - name: JAVA_TOOL_OPTIONS
+              value: "-XX:MaxRAMPercentage=75.0"
+          readinessProbe:
+            tcpSocket: { port: 8084 }
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 30
+          livenessProbe:
+            tcpSocket: { port: 8084 }
+            initialDelaySeconds: 90
+            periodSeconds: 15
+          resources:
+            requests: { memory: "256Mi", cpu: "100m" }
+            limits:   { memory: "512Mi", cpu: "600m" }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: warehouse-service
+  labels: { app: warehouse-service }
+spec:
+  selector: { app: warehouse-service }
+  ports:
+    - port: 8084
+      targetPort: 8084

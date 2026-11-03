@@ -1,0 +1,65 @@
+# Spring Cloud Gateway (web BFF). The frontend reaches it in-cluster at
+# http://web-gateway:8080; the Route is optional but handy for testing /api.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web-gateway
+  labels: { app: web-gateway }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: web-gateway }
+  template:
+    metadata:
+      labels: { app: web-gateway }
+    spec:
+      containers:
+        - name: web-gateway
+          image: DOCKERHUB_USER/web-gateway:latest
+          ports:
+            - containerPort: 8080
+          envFrom:
+            - configMapRef: { name: app-config }
+          env:
+            - name: JWT_SECRET
+              valueFrom: { secretKeyRef: { name: app-secrets, key: JWT_SECRET } }
+            - name: JAVA_TOOL_OPTIONS
+              value: "-XX:MaxRAMPercentage=75.0"
+          readinessProbe:
+            tcpSocket: { port: 8080 }
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 30
+          livenessProbe:
+            tcpSocket: { port: 8080 }
+            initialDelaySeconds: 90
+            periodSeconds: 15
+          resources:
+            requests: { memory: "256Mi", cpu: "100m" }
+            limits:   { memory: "512Mi", cpu: "600m" }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: web-gateway
+  labels: { app: web-gateway }
+spec:
+  selector: { app: web-gateway }
+  ports:
+    - port: 8080
+      targetPort: 8080
+---
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: web-gateway
+  labels: { app: web-gateway }
+spec:
+  to:
+    kind: Service
+    name: web-gateway
+  port:
+    targetPort: 8080
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect

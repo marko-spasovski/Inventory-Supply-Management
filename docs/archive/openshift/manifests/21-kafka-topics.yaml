@@ -1,0 +1,43 @@
+# One-shot Job that creates the Kafka topics the services subscribe to, so
+# consumers (notification-service, warehouse-service) don't fail on a fresh
+# cluster where the topics don't exist yet. Idempotent (--if-not-exists).
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: kafka-topics-init
+  labels: { app: kafka }
+spec:
+  backoffLimit: 10
+  template:
+    metadata:
+      labels: { app: kafka-topics-init }
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: create-topics
+          image: apache/kafka:3.8.0
+          env:
+            - name: LOG_DIR
+              value: "/tmp/kafka-logs"
+          command:
+            - sh
+            - -c
+            - |
+              set -e
+              echo "Waiting for Kafka to be reachable..."
+              for i in $(seq 1 30); do
+                if /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --list >/dev/null 2>&1; then
+                  echo "Kafka is up."; break
+                fi
+                echo "  ...not ready yet ($i)"; sleep 5
+              done
+              for t in order.created order.status.changed inventory.low inventory.out warehouse.capacity inventory.stock.updated; do
+                echo "Creating topic $t"
+                /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 \
+                  --create --if-not-exists --topic "$t" --partitions 1 --replication-factor 1
+              done
+              echo "Done. Current topics:"
+              /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --list
+          resources:
+            requests: { memory: "128Mi", cpu: "50m" }
+            limits:   { memory: "384Mi", cpu: "400m" }

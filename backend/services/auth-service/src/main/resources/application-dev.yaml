@@ -14,11 +14,15 @@ spring:
       enabled: true
     livereload:
       enabled: true
+# No secret in source code (R03): JWT_SECRET must be set (the launcher and docker-compose.yml set it).
 jwt:
-  secret: ewzqAN2z1bq7yYFcN3/KId4wbohavFXxHE7nnr82lZE=
-  expiration-ms: 3600000
+  secret: ${JWT_SECRET}
+  expiration-ms: ${JWT_EXPIRATION_MS:3600000}
 
 auth:
+  bootstrap-admin:
+    email: ${AUTH_BOOTSTRAP_ADMIN_EMAIL:}
+    password: ${AUTH_BOOTSTRAP_ADMIN_PASSWORD:}
   cookie:
     secure: false        # false for localhost (no HTTPS)
     same-site: Lax       # Lax works fine with proxy

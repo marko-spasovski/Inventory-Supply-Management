@@ -1,0 +1,56 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: order-service
+  labels: { app: order-service }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: order-service }
+  template:
+    metadata:
+      labels: { app: order-service }
+    spec:
+      containers:
+        - name: order-service
+          image: DOCKERHUB_USER/order-service:latest
+          ports:
+            - containerPort: 8087
+          env:
+            - name: DB_USER
+              valueFrom: { secretKeyRef: { name: app-secrets, key: DB_USER } }
+            - name: DB_PASSWORD
+              valueFrom: { secretKeyRef: { name: app-secrets, key: DB_PASSWORD } }
+            - name: ConnectionStrings__DefaultConnection
+              value: "Host=postgres;Port=5432;Database=orders;Username=$(DB_USER);Password=$(DB_PASSWORD)"
+            - name: Kafka__BootstrapServers
+              valueFrom: { configMapKeyRef: { name: app-config, key: KAFKA_BOOTSTRAP_SERVERS } }
+            - name: INVENTORY_GRPC_URL
+              valueFrom: { configMapKeyRef: { name: app-config, key: INVENTORY_GRPC_URL } }
+            - name: DocumentStorage__BasePath
+              value: "/tmp/order-docs"
+            - name: ASPNETCORE_URLS
+              value: "http://+:8087"
+          readinessProbe:
+            tcpSocket: { port: 8087 }
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            failureThreshold: 30
+          livenessProbe:
+            tcpSocket: { port: 8087 }
+            initialDelaySeconds: 60
+            periodSeconds: 15
+          resources:
+            requests: { memory: "128Mi", cpu: "100m" }
+            limits:   { memory: "384Mi", cpu: "500m" }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: order-service
+  labels: { app: order-service }
+spec:
+  selector: { app: order-service }
+  ports:
+    - port: 8087
+      targetPort: 8087

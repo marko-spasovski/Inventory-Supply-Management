@@ -1,0 +1,59 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: inventory-service
+  labels: { app: inventory-service }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: inventory-service }
+  template:
+    metadata:
+      labels: { app: inventory-service }
+    spec:
+      containers:
+        - name: inventory-service
+          image: DOCKERHUB_USER/inventory-service:latest
+          ports:
+            - containerPort: 8086   # HTTP API
+            - containerPort: 9090   # gRPC (called by order-service)
+          env:
+            - name: SPRING_DATASOURCE_URL
+              value: "jdbc:postgresql://postgres:5432/inventory"
+            - name: SPRING_DATASOURCE_USERNAME
+              valueFrom: { secretKeyRef: { name: app-secrets, key: DB_USER } }
+            - name: SPRING_DATASOURCE_PASSWORD
+              valueFrom: { secretKeyRef: { name: app-secrets, key: DB_PASSWORD } }
+            - name: SPRING_KAFKA_BOOTSTRAP_SERVERS
+              valueFrom: { configMapKeyRef: { name: app-config, key: KAFKA_BOOTSTRAP_SERVERS } }
+            - name: INVENTORY_DOCS_PATH
+              value: "/tmp/inventory-docs"
+            - name: JAVA_TOOL_OPTIONS
+              value: "-XX:MaxRAMPercentage=75.0"
+          readinessProbe:
+            tcpSocket: { port: 8086 }
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 30
+          livenessProbe:
+            tcpSocket: { port: 8086 }
+            initialDelaySeconds: 90
+            periodSeconds: 15
+          resources:
+            requests: { memory: "256Mi", cpu: "100m" }
+            limits:   { memory: "512Mi", cpu: "600m" }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: inventory-service
+  labels: { app: inventory-service }
+spec:
+  selector: { app: inventory-service }
+  ports:
+    - name: http
+      port: 8086
+      targetPort: 8086
+    - name: grpc
+      port: 9090
+      targetPort: 9090

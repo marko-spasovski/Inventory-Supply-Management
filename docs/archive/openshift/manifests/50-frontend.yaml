@@ -1,0 +1,58 @@
+# Combined web UI (shell + all micro-frontends) served by one nginx, which also
+# proxies /api -> web-gateway and /ws -> notification-service. This Route is the
+# main public entry point for the system.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web-frontend
+  labels: { app: web-frontend }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: web-frontend }
+  template:
+    metadata:
+      labels: { app: web-frontend }
+    spec:
+      containers:
+        - name: web-frontend
+          image: DOCKERHUB_USER/web-frontend:latest
+          ports:
+            - containerPort: 8080
+          readinessProbe:
+            tcpSocket: { port: 8080 }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket: { port: 8080 }
+            initialDelaySeconds: 15
+            periodSeconds: 15
+          resources:
+            requests: { memory: "32Mi", cpu: "20m" }
+            limits:   { memory: "96Mi", cpu: "200m" }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: web-frontend
+  labels: { app: web-frontend }
+spec:
+  selector: { app: web-frontend }
+  ports:
+    - port: 8080
+      targetPort: 8080
+---
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: web-frontend
+  labels: { app: web-frontend }
+spec:
+  to:
+    kind: Service
+    name: web-frontend
+  port:
+    targetPort: 8080
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect

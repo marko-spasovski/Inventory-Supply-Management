@@ -77,6 +77,21 @@ class AuthServiceTest {
 
     // ---------- register ----------
 
+    // R01: a caller asking for a privileged role through public registration still gets WORKER.
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"admin", "ADMIN", "manager", "driver", ""})
+    void register_alwaysCreatesWorker_whateverRoleIsRequested(String requested) {
+        RegisterRequest req = new RegisterRequest("Mallory", "m@x.com", "secret", requested);
+        when(repository.existsByEmail("m@x.com")).thenReturn(false);
+        when(passwordEncoder.encode("secret")).thenReturn("encoded");
+        when(repository.save(any(User.class))).thenAnswer(i -> i.getArgument(0));
+
+        AuthResponse resp = service.register(req);
+
+        assertEquals("WORKER", resp.role());
+        verify(repository).save(argThat(u -> u.getRole() == Role.WORKER));
+    }
+
     @Test
     void register_savesUser_whenEmailIsNew() {
         RegisterRequest req = new RegisterRequest("Alice", "a@x.com", "secret", "manager");
@@ -88,11 +103,11 @@ class AuthServiceTest {
 
         assertEquals("a@x.com", resp.email());
         assertEquals("Alice", resp.name());
-        assertEquals("MANAGER", resp.role());
+        assertEquals("WORKER", resp.role());
         verify(repository).save(argThat(u ->
                 u.getEmail().equals("a@x.com")
                         && u.getPassword().equals("encoded")
-                        && u.getRole() == Role.MANAGER));
+                        && u.getRole() == Role.WORKER));
     }
 
     @Test
@@ -115,27 +130,7 @@ class AuthServiceTest {
         verify(repository).save(argThat(u -> u.getRole() == Role.WORKER));
     }
 
-    @Test
-    void register_mapsAdminRole_caseInsensitive() {
-        RegisterRequest req = new RegisterRequest("A", "a@x.com", "secret", "ADMIN");
-        when(repository.existsByEmail(any())).thenReturn(false);
-        when(passwordEncoder.encode(any())).thenReturn("h");
-        when(repository.save(any())).thenAnswer(i -> i.getArgument(0));
 
-        service.register(req);
-        verify(repository).save(argThat(u -> u.getRole() == Role.ADMIN));
-    }
-
-    @Test
-    void register_mapsDriverRole() {
-        RegisterRequest req = new RegisterRequest("D", "d@x.com", "secret", "driver");
-        when(repository.existsByEmail(any())).thenReturn(false);
-        when(passwordEncoder.encode(any())).thenReturn("h");
-        when(repository.save(any())).thenAnswer(i -> i.getArgument(0));
-
-        service.register(req);
-        verify(repository).save(argThat(u -> u.getRole() == Role.DRIVER));
-    }
 
     @Test
     void register_unknownRole_defaultsToWorker() {

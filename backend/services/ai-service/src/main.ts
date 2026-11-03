@@ -9,6 +9,11 @@ import { createReorderRouter }          from './routes/reorder-suggestion';
 
 const app = express();
 
+// /livez and /readyz for Kubernetes probes and the compose healthcheck. Registered before the
+// rate limiter so probes never use up a client's quota. No database: both report the process is up.
+app.get('/livez', (_req, res) => { res.json({ status: 'UP' }); });
+app.get('/readyz', (_req, res) => { res.json({ status: 'UP' }); });
+
 // ai-service sits behind the mobile-gateway, which forwards the client IP
 // via X-Forwarded-For. Tell Express to trust exactly one hop so
 // express-rate-limit keys off the real client IP instead of refusing to

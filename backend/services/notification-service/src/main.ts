@@ -51,6 +51,16 @@ async function bootstrap(): Promise<void> {
     app.use('/notifications', createNotificationRouter(repository));
     app.use('/notifications/device-tokens', createDeviceTokenRouter(pool));
     app.get('/health', (_req, res) => res.json({ status: 'ok', service: 'notification-service' }));
+    // /livez: the process is up. /readyz: the database answers (Kubernetes probes, compose healthcheck).
+    app.get('/livez', (_req, res) => res.json({ status: 'UP' }));
+    app.get('/readyz', async (_req, res) => {
+      try {
+        await pool.query('SELECT 1');
+        res.json({ status: 'UP' });
+      } catch {
+        res.status(503).json({ status: 'DOWN' });
+      }
+    });
 
     app.listen(8088, () => console.log(`[HTTP] listening on port 8088`));
 

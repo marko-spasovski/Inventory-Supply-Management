@@ -39,7 +39,7 @@ Kafka event, published from a transactional outbox (ADR 003, ADR 004).
 - No shared library with business logic. Shared code is generated from contracts, plus the
   frontend's pure helpers.
 - Every service verifies identity and permissions itself. "Internal" does not mean trusted.
-- Every service has its own Dockerfile, tests, CI workflow, README, `/healthz` and `/readyz`.
+- Every service has its own Dockerfile, tests, CI workflow, README, `/livez` and `/readyz`.
 
 ## Runtime
 

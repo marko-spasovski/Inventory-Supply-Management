@@ -27,8 +27,11 @@ scripts/ (local launcher), .github/workflows/.
 ## Commands (keep this section accurate; update when scripts change)
 - Host tools are optional: every command below also runs in the pinned container image used by CI
   (`maven:3.9-eclipse-temurin-21`, `mcr.microsoft.com/dotnet/sdk:9.0`, `node:24`).
-- Whole stack for development: `./run-local.sh` (infrastructure in Docker, apps on the host; see
+- Whole stack in containers: `docker compose up --build --wait` (web http://localhost:3000, web API :8080,
+  mobile API :8090); `docker compose down` (add `-v` to delete data). E2E: `cd tests/e2e && npm ci && npx playwright test`.
+- Fast development with hot reload: `./run-local.sh` (infrastructure in Docker, apps on the host; see
   docs/LOCAL_DEVELOPMENT.md). Stop with `q`.
+- Every service answers `/livez` (process up) and `/readyz` (can serve; 503 when its database is down).
 - Java service: `./mvnw test`, `./mvnw verify` (in the service folder).
 - .NET service: `dotnet test` (fleet and product: in `<service>.Tests/`; order:
   `dotnet test order-service.Tests/order-service.Tests.csproj`).

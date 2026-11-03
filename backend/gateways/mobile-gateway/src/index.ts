@@ -21,6 +21,11 @@ import { errorMiddleware, notFoundMiddleware } from './middleware/error.middlewa
 
 const app = express();
 
+// /livez and /readyz for Kubernetes probes and the compose healthcheck. Registered before the
+// rate limiter so probes never use up a client's quota. No database: both report the process is up.
+app.get('/livez', (_req, res) => { res.json({ status: 'UP' }); });
+app.get('/readyz', (_req, res) => { res.json({ status: 'UP' }); });
+
 // ── Security & logging ─────────────────────────────────────────────────────
 app.use(helmet());
 app.use(morgan('combined'));

@@ -48,3 +48,18 @@ spring:
               uri: ${WAREHOUSE_SERVICE_URL:http://localhost:8084}
               predicates:
                 - Path=/warehouses/**
+
+# /livez: the process is up. /readyz: it can serve traffic (includes the database where there is one).
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      probes:
+        enabled: true
+        add-additional-paths: true
+      group:
+        readiness:
+          include: readinessState

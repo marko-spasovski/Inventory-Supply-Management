@@ -1,98 +1,42 @@
-############################################
-# GENERAL
-############################################
+# Local launcher state, logs, dependency caches and development documents.
+.local-run/
+**/node_modules/
+**/target/
+**/bin/
+**/obj/
+**/dist/
+**/__pycache__/
+**/.expo/
+
+# Merged from the Inventory-Supply-Management repo .gitignore.
+# Its *.sh, *.txt and Migrations/*.cs rules were left out: they would hide
+# run-local.sh, the seed scripts, docs/archive/convo.txt and EF Core migrations.
 .DS_Store
 Thumbs.db
 *.log
-logs/
 *.tmp
 *.swp
 *.swo
-*.txt
-############################################
-# ENV / SECRETS
-############################################
 .env
 .env.*
 *.env
-# Only ignore local overrides, not main configs
 application-*.local.yml
 application-*.local.yaml
 application-*.local.properties
-
-############################################
-# JAVA / SPRING BOOT
-############################################
-target/
 *.jar
 *.war
 *.ear
 *.class
-*.log
-
-# IntelliJ
 .idea/
 *.iml
-
-############################################
-# NODE / ANGULAR
-############################################
-node_modules/
-dist/
-.angular/
-coverage/
-*.log
-
-############################################
-# .NET / C#
-############################################
-bin/
-obj/
-Debug/
-Release/
-*.user
-*.suo
-*.userosscache
-*.sln.docstates
-*.coverage
-*.trx
-*.TestResults/
-*.ncrunch*
-*.dotCover
-*.opencover
-*.snap
-*.log
-
-############################################
-# DOCKER
-############################################
-*.pid
-*.seed
-*.pid.lock
-docker-data/
-
-############################################
-# PROJECT SPECIFIC
-############################################
-services/**/logs/
-services/**/*.log
-
-# Migration outputs (EF Core / SQL migrations)
-services/**/Migrations/*.Designer.cs
-services/**/Migrations/*.cs
-
-# Angular build & node modules
-web-app/**/dist/
-web-app/**/node_modules/
-
-# VS Code
 .vscode/
-
-# Test output
 coverage/
 test-output/
+*.user
+*.suo
+*.trx
+*.TestResults/
+docker-data/
 
-############################################
-# SCRIPTS
-############################################
-*.sh
+# Runtime uploads written by order-service and inventory-service (never source).
+**/Documents/

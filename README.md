@@ -1,296 +1,154 @@
-# Inventory Supply Management
+# Novo: Inventory & Supply ERP
 
-<p align="center">
-  Polyglot microservices platform for inventory, warehousing, fleet, ordering, and company operations.
-</p>
+A web and mobile platform for inventory, procurement (supply orders), warehouse and fleet management.
 
-<p align="center">
-  <img src="https://img.shields.io/badge/Angular-21-DD0031?style=for-the-badge&logo=angular&logoColor=white" alt="Angular 21" />
-  <img src="https://img.shields.io/badge/Spring_Boot-3.5-6DB33F?style=for-the-badge&logo=springboot&logoColor=white" alt="Spring Boot 3.5" />
-  <img src="https://img.shields.io/badge/.NET-9-512BD4?style=for-the-badge&logo=dotnet&logoColor=white" alt=".NET 9" />
-  <img src="https://img.shields.io/badge/Node.js-TypeScript-3178C6?style=for-the-badge&logo=typescript&logoColor=white" alt="Node.js TypeScript" />
-  <img src="https://img.shields.io/badge/PostgreSQL-16-4169E1?style=for-the-badge&logo=postgresql&logoColor=white" alt="PostgreSQL 16" />
-  <img src="https://img.shields.io/badge/Kafka-Event_Driven-231F20?style=for-the-badge&logo=apachekafka&logoColor=white" alt="Kafka" />
-  <img src="https://img.shields.io/badge/gRPC-Service_to_Service-244C5A?style=for-the-badge&logo=grpc&logoColor=white" alt="gRPC" />
-</p>
+- **Backend:** nine polyglot microservices (Spring Boot, ASP.NET Core, Express/TypeScript). Each service owns its data, services talk over **gRPC** and **Kafka**, and two **JWT-authenticated gateways** sit in front of them.
+- **Frontend:** a React **Module Federation** shell with seven feature remotes, an **Expo** mobile app, and shared TypeScript packages.
+- **Ops:** PostgreSQL per service, Docker Compose for local runs, and OpenShift manifests for deployment.
 
-## Overview
-
-This repository contains an ERP-style inventory and supply management system built as a polyglot microservices monorepo.
-
-The current implementation combines:
-
-- an Angular 21 frontend
-- a Spring Cloud Gateway entrypoint
-- Spring Boot services for authentication, companies, warehouses, and inventory
-- .NET 9 services for fleet, products, and orders
-- a Node.js notification service with HTTP and WebSocket delivery
-- PostgreSQL per service, Kafka for asynchronous events, and gRPC between orders and inventory
-
-## Highlights
-
-- Role-aware authentication with JWT stored in an `HttpOnly` cookie
-- Central gateway routing for all business APIs
-- Warehouse, company, product, stock, order, driver, and vehicle management modules
-- Kafka-based event flow for operational notifications
-- Real-time notification push over WebSocket
-- gRPC integration from `order-service` to `inventory-service`
-- Docker Compose infrastructure for databases, Kafka, Zookeeper, and nginx
-- `tmux` launcher for running the full local development stack in one command
+> Status: this is a development project, not a hardened product. See [the project review](docs/PROJECT_REVIEW_AND_DOCUMENTATION.md) for known issues (R01–R24) and a stabilisation plan.
 
 ## Architecture
 
+The system uses **microservices behind a BFF (backend-for-frontend) gateway per client**. Each bounded context is its own service with a database it owns. Calls that must complete before the request returns use gRPC, and side effects that can happen later go through Kafka events. On the frontend, a **micro-frontend** shell sits on the web side, and a separate native client sits on the mobile side.
+
 ```mermaid
-flowchart TD
-    browser["Browser"]
-    nginx["nginx"]
-    frontend["Angular Frontend (4200)"]
-    gateway["Gateway Service (8080)"]
+flowchart LR
+    subgraph Clients
+        Web["React shell<br/>+ 7 MF remotes"]
+        App["Expo mobile app"]
+    end
 
-    auth["Auth Service (8081)"]
-    company["Company Service (8082)"]
-    fleet["Fleet Service (8083)"]
-    warehouse["Warehouse Service (8084)"]
-    product["Product Service (8085)"]
-    inventory["Inventory Service (8086, gRPC 9090)"]
-    order["Order Service (8087)"]
-    notification["Notification Service (8088, WS 9091)"]
-    kafka["Kafka"]
+    subgraph Edge["Gateways (JWT)"]
+        WGW["web-gateway<br/>Spring Cloud Gateway :8080<br/>cookie / Bearer"]
+        MGW["mobile-gateway<br/>Express BFF :8090<br/>Bearer + WS proxy"]
+    end
 
-    browser --> nginx
-    browser --> frontend
-    frontend --> gateway
+    subgraph Services["Domain services"]
+        Auth["auth :8081<br/>Spring"]
+        Company["company :8082<br/>Spring"]
+        Warehouse["warehouse :8084<br/>Spring"]
+        Inventory["inventory :8086<br/>Spring · gRPC :9090"]
+        Fleet["fleet :8083<br/>ASP.NET"]
+        Product["product :8085<br/>ASP.NET"]
+        Order["order :8087<br/>ASP.NET"]
+        Notif["notification :8088 / WS :9091<br/>Express"]
+        AI["ai :8089<br/>Express"]
+    end
 
-    gateway --> auth
-    gateway --> company
-    gateway --> fleet
-    gateway --> warehouse
-    gateway --> product
-    gateway --> inventory
-    gateway --> order
-    gateway --> notification
+    Kafka[("Kafka")]
+    DB[("PostgreSQL<br/>one DB per service")]
 
-    order -->|gRPC| inventory
-    order -->|events| kafka
-    inventory -->|events| kafka
-    warehouse -->|events| kafka
-    kafka --> notification
-    notification --> browser
+    Web --> WGW
+    App --> MGW
+    WGW --> Auth & Company & Warehouse & Inventory & Fleet & Product & Order & Notif
+    MGW --> Auth & Company & Warehouse & Inventory & Fleet & Product & Order & Notif & AI
+    Order -- "gRPC AddStock" --> Inventory
+    Order -- "order.created / order.status.changed" --> Kafka
+    Inventory -- "inventory.stock.updated / low / out" --> Kafka
+    Kafka --> Warehouse
+    Kafka --> Notif
+    AI -. "read snapshot" .-> Inventory & Product & Warehouse
+    Services --- DB
 ```
 
-## Screenshots
+### Architectural decisions
 
-<p align="center">
-  <img src="docs/screenshots/Dashboard.png" alt="InventoryPro dashboard overview" width="48%" />
-  <img src="docs/screenshots/Login.png" alt="InventoryPro login screen" width="48%" />
-</p>
+| Concern | Choice | Where |
+|---|---|---|
+| Service boundaries | One service per bounded context: auth, company, warehouse, inventory, fleet, product, order, notification, ai | `backend/services/*` |
+| Data ownership | Database-per-service (8 PostgreSQL DBs; `ai-service` is stateless and reads through other services' APIs) | `deploy/local/compose.yaml` |
+| Synchronous calls between services | gRPC with a shared `inventory.proto` contract | `inventory-service/src/main/proto`, `order-service/Protos` |
+| Asynchronous integration | Kafka events for capacity projection and notifications | see *Events* below |
+| Edge | One gateway per client type (BFF): web uses Spring Cloud Gateway, mobile uses Express | `backend/gateways/*` |
+| AuthN | JWT access and refresh tokens issued by `auth-service` and validated at the gateways | `auth-service`, `gateways/*/…/Jwt*` |
+| Service internals | Layered/clean: `domain` → `application` → `infrastructure` → `presentation` (inventory adds CQRS command/query handlers) | each service |
+| Web UI | Vite Module Federation: the shell hosts seven remotes (auth, companies, warehouses, products, fleet, inventory, orders) | `frontend/web/*` |
+| Shared frontend code | npm workspace packages for DTO types, domain (roles, order states, query keys) and i18n (SL/EN) | `frontend/packages/*` |
+| Real-time | Kafka → notification-service → WebSocket (proxied by the mobile gateway); Expo push tokens | `notification-service` |
+| Analytics | Inventory analysis and reorder suggestions, with an optional Azure OpenAI summary | `ai-service` |
 
-<p align="center">
-  <img src="docs/screenshots/Warehouses.png" alt="InventoryPro warehouses page" width="48%" />
-  <img src="docs/screenshots/Products.png" alt="InventoryPro products page" width="48%" />
-</p>
+### Events
 
-<p align="center">
-  <img src="docs/screenshots/Stock.png" alt="InventoryPro stock page" width="48%" />
-  <img src="docs/screenshots/Orders.png" alt="InventoryPro orders page" width="48%" />
-</p>
+| Topic | Producer | Consumer |
+|---|---|---|
+| `order.created`, `order.status.changed` | order | notification |
+| `inventory.stock.updated` | inventory | warehouse (capacity) |
+| `inventory.low`, `inventory.out` | inventory, warehouse | notification |
 
-<p align="center">
-  <img src="docs/screenshots/Companies.png" alt="InventoryPro companies page" width="48%" />
-  <img src="docs/screenshots/Vehicles.png" alt="InventoryPro vehicles page" width="48%" />
-</p>
+### Main flow: supply order
 
-<p align="center">
-  <img src="docs/screenshots/Drivers.png" alt="InventoryPro drivers page" width="48%" />
-  <img src="docs/screenshots/Notifications_Dark_Mode.png" alt="InventoryPro notifications panel in dark mode" width="48%" />
-</p>
+1. A user creates an order (product + company + warehouse + driver + quantity) through a gateway → `order-service`.
+2. When the order is **approved**, `order-service` calls `inventory-service` over gRPC to add stock and publishes `order.status.changed`.
+3. `inventory-service` publishes `inventory.stock.updated`, and `warehouse-service` updates its used capacity.
+4. Threshold breaches emit `inventory.low` / `inventory.out`. `notification-service` stores them and pushes them over WebSocket or Expo push.
 
-## Services
-
-| Module | Stack | Port(s) | Responsibility |
-| --- | --- | --- | --- |
-| `web-app/inventory-system-frontend` | Angular 21 + PrimeNG | `4200` | UI for dashboard, warehouses, products, stock, orders, companies, vehicles, drivers, and settings |
-| `gateway-service` | Spring Cloud Gateway + WebFlux | `8080` | Single API entrypoint, JWT validation, route forwarding |
-| `services/auth-service` | Spring Boot | `8081` | Login, registration, logout, cookie-based auth |
-| `services/company-service` | Spring Boot | `8082` | Company CRUD and totals |
-| `services/fleet-service` | ASP.NET Core | `8083` | Driver and vehicle management |
-| `services/warehouse-service` | Spring Boot | `8084` | Warehouse CRUD, totals, inventory-capacity events |
-| `services/product-service` | ASP.NET Core | `8085` | Product and category management |
-| `services/inventory-service` | Spring Boot + gRPC | `8086`, `9090` | Inventory REST API, stock updates, gRPC server |
-| `services/order-service` | ASP.NET Core + gRPC client | `8087` | Order lifecycle, status updates, document upload |
-| `services/notification-service` | Node.js + TypeScript | `8088`, `9091` | Notification history API, Kafka consumers, WebSocket broadcasting |
-
-## API Surface
-
-The gateway forwards these paths:
-
-- `/auth/**` -> `auth-service`
-- `/companies/**` -> `company-service`
-- `/drivers/**`, `/vehicles/**` -> `fleet-service`
-- `/warehouses/**` -> `warehouse-service`
-- `/products/**`, `/categories/**` -> `product-service`
-- `/inventory/**` -> `inventory-service`
-- `/orders/**` -> `order-service`
-- `/notifications/**` -> `notification-service`
-
-The frontend currently calls those APIs through `/api/*` URLs and expects a reverse proxy in front of the stack.
-
-## Local Development
-
-### Prerequisites
-
-- Docker and Docker Compose
-- `tmux`
-- JDK 21
-- Maven
-- .NET 9 SDK
-- Node.js 20+
-- npm 11+
-
-### 1. Start infrastructure
-
-The current `compose.yaml` brings up infrastructure services and nginx. Most application services are still intended to run locally from source.
-
-```bash
-docker compose up -d
-```
-
-This provisions:
-
-- nginx
-- zookeeper
-- kafka
-- `auth-db` on `5432`
-- `company-db` on `5433`
-- `fleet-db` on `5434`
-- `warehouse-db` on `5435`
-- `product-db` on `5436`
-- `inventory-db` on `5437`
-- `order-db` on `5438`
-- `notification-db` on `5439`
-
-### 2. Install Node dependencies
-
-```bash
-cd services/notification-service && npm install
-cd ../../web-app/inventory-system-frontend && npm install
-```
-
-### 3. Launch the app stack
-
-Use the bundled `tmux` launcher to open the full development workspace:
-
-```bash
-./scripts/start-tmux.sh
-```
-
-If you also want the script to bring up Docker infrastructure first:
-
-```bash
-START_INFRA=1 ./scripts/start-tmux.sh
-```
-
-The launcher starts:
-
-- gateway
-- auth service
-- company service
-- inventory service
-- warehouse service
-- fleet service
-- order service
-- product service
-- notification service
-- Angular frontend
-
-### 4. Open the app
-
-- `http://localhost` for the nginx entrypoint
-- `http://localhost:4200` for the Angular dev server
-- `http://localhost:8080` for the gateway
-
-## Running Services Manually
-
-If you prefer to start services one by one:
-
-```bash
-cd gateway-service && mvn spring-boot:run
-cd services/auth-service && mvn spring-boot:run
-cd services/company-service && mvn spring-boot:run
-cd services/warehouse-service && mvn spring-boot:run
-cd services/inventory-service && mvn spring-boot:run
-
-cd services/fleet-service && dotnet run
-cd services/product-service && dotnet run
-cd services/order-service && dotnet run
-
-cd services/notification-service && npm run dev
-cd web-app/inventory-system-frontend && npm start
-```
-
-## Developer Notes
-
-- `compose.yaml` currently acts primarily as infrastructure orchestration; most application containers are commented out.
-- The frontend module names visible in navigation are: Dashboard, Warehouses, Products, Stock, Orders, Companies, Vehicles, Drivers, and Settings.
-- `inventory-service` exposes both REST and gRPC, and `order-service` consumes the gRPC contract from `Protos/inventory.proto`.
-- The notification service persists notifications to PostgreSQL, exposes HTTP history endpoints, and broadcasts live events over WebSocket.
-
-## Project Structure
+## Repository layout
 
 ```text
-.
-├── .github/workflows/         # CI jobs
-├── gateway-service/           # Spring Cloud Gateway
-├── services/
-│   ├── auth-service/          # Spring Boot auth
-│   ├── company-service/       # Spring Boot company domain
-│   ├── fleet-service/         # ASP.NET Core fleet domain
-│   ├── inventory-service/     # Spring Boot inventory + gRPC
-│   ├── notification-service/  # Node.js notifications + WebSocket
-│   ├── order-service/         # ASP.NET Core orders + gRPC client
-│   ├── product-service/       # ASP.NET Core products + categories
-│   └── warehouse-service/     # Spring Boot warehouse domain
-├── scripts/
-│   └── start-tmux.sh          # Local dev launcher
-├── web-app/
-│   └── inventory-system-frontend/
-├── compose.yaml               # Infrastructure stack
-└── nginx.conf                 # Reverse proxy config
+Novo/
+├── README.md                     ← you are here
+├── run-local.sh                  one-command local stack (wraps scripts/run_local.py)
+├── .github/workflows/            ci.yml (build + test everything) · images.yml (push images for OpenShift)
+│
+├── backend/
+│   ├── gateways/
+│   │   ├── web-gateway/          Spring Cloud Gateway: web edge, JWT filter, routing
+│   │   └── mobile-gateway/       Express/TS BFF: mobile edge, JWT, WS proxy, AI routes
+│   ├── services/
+│   │   ├── auth-service/         Spring Boot: users, login, tokens
+│   │   ├── company-service/      Spring Boot: companies
+│   │   ├── warehouse-service/    Spring Boot: warehouses, capacity (Kafka consumer)
+│   │   ├── inventory-service/    Spring Boot: stock, thresholds (gRPC server, Kafka producer)
+│   │   ├── fleet-service/        ASP.NET Core: drivers, vehicles
+│   │   ├── product-service/      ASP.NET Core: products, categories, SKU
+│   │   ├── order-service/        ASP.NET Core: orders, PDFs (gRPC client, Kafka producer)
+│   │   ├── notification-service/ Express/TS: Kafka consumer, WebSocket, push tokens
+│   │   └── ai-service/           Express/TS: inventory analytics, reorder suggestions
+│   └── test-data/                seed scripts for sample business data
+│
+├── frontend/                     npm workspace root
+│   ├── packages/                 api-types · domain · i18n (shared by web + mobile)
+│   ├── web/
+│   │   ├── shell/                Module Federation host
+│   │   └── *-mf/                 7 feature remotes
+│   └── mobile/                   Expo Router app (scanner, push, offline-aware)
+│
+├── deploy/
+│   ├── local/                    compose.yaml (Postgres ×8, Kafka, optional .NET) + Dockerfile.dotnet
+│   ├── docker/                   older all-in-containers compose.yaml + legacy nginx.conf
+│   └── openshift/                manifests (config, Postgres, Kafka, services, gateways, frontend)
+│
+├── tests/
+│   └── e2e/                      Playwright API integration tests
+│
+├── scripts/                      local launcher (Python) and its unit tests
+│
+└── docs/
+    ├── PROJECT_REVIEW_AND_DOCUMENTATION.md   detailed review, API/event reference, findings
+    ├── LOCAL_DEVELOPMENT.md                  launcher usage and troubleshooting
+    ├── screenshots/                          UI screenshots
+    └── archive/                              historical notes (not authoritative)
 ```
 
-## Testing And CI
+Unit and integration tests live next to the code they test: JUnit under `src/test` for the Spring services, `*.Tests` projects for the .NET services, `__tests__` folders for Node and React, and `frontend/mobile/__tests__` for the mobile app.
 
-Current CI is defined in `.github/workflows/ci.yml` and includes jobs for:
-
-- `warehouse-service`
-- `inventory-service`
-- `order-service`
-- `notification-service`
-
-Local test commands vary by stack:
+## Quick start
 
 ```bash
-cd services/warehouse-service && mvn test
-cd services/inventory-service && mvn test
-cd services/order-service && dotnet test
-cd web-app/inventory-system-frontend && npm test
+./run-local.sh            # Postgres + Kafka in Docker; services, gateways and web on the host
+# open http://localhost:3000 when it prints STACK READY. Press q to stop.
 ```
 
-## Current State
+See [docs/LOCAL_DEVELOPMENT.md](docs/LOCAL_DEVELOPMENT.md) for options (`--backend-only`, `--mobile`, `--dotnet docker`) and seeding.
 
-This repository is already in a productive development shape, but it is still evolving. The current branch reflects an in-progress, actively integrated system rather than a fully standardized production release.
+## Ports
 
-The strongest parts of the current setup are:
-
-- clear domain separation across services
-- a practical local development launcher
-- working event-driven and gRPC integration paths
-- a modern frontend stack with protected routes and dashboard modules
-
-The main areas still worth tightening are:
-
-- environment and secret management
-- consistency of local proxying and container networking
-- endpoint and contract polish in a few services
-- broader CI coverage across the full monorepo
-# Inventory-Supply-Management-Backend
+| Component | Port |
+|---|---|
+| Web shell / remotes | 3000 / 3001–3007 |
+| web-gateway / mobile-gateway | 8080 / 8090 |
+| auth · company · fleet · warehouse · product · inventory · order · notification · ai | 8081 · 8082 · 8083 · 8084 · 8085 · 8086 · 8087 · 8088 · 8089 |
+| inventory gRPC / notification WS | 9090 / 9091 |
+| Kafka | 9092 |
+| PostgreSQL (auth … notification) | 5432–5439 |

@@ -9,7 +9,7 @@ made a deployment impossible to reproduce.
 
 ## Decision
 - `release.yml` builds every image on push to `main`, scans it with Trivy (fails on CRITICAL), and
-  pushes it to `ghcr.io/marko-spasovski/inventory-supply-management/<name>` using the workflow's
+  pushes it to `ghcr.io/marko-spasovski/polyglot-erp-microservices/<name>` using the workflow's
   own `GITHUB_TOKEN`.
 - The deploy job writes the image digests into the VPS overlay and runs `kubectl apply -k`.
 - It uses a namespace-scoped kubeconfig stored as a secret of the GitHub `production`

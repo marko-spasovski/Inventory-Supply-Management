@@ -36,7 +36,7 @@ kubectl -n cert-manager wait --for=condition=available deployment --all --timeou
 ## 4. Configure and deploy
 
 ```bash
-git clone https://github.com/marko-spasovski/Inventory-Supply-Management.git && cd Inventory-Supply-Management
+git clone https://github.com/marko-spasovski/polyglot-erp-microservices.git && cd polyglot-erp-microservices
 cd deploy/k8s/overlays/vps
 cp secrets.env.example secrets.env                  # fill every value: openssl rand -base64 48
 sed -i 's/example.com/<your-domain>/g' ingress.yaml

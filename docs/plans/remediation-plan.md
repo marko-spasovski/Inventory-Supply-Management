@@ -7,7 +7,7 @@
   2026-11-03 against the current source (R01, R02, R03, R04 and R05 confirmed line by line),
   plus the conventions of the Outreach-Platform repository (AGENTS.md, ADRs, specs, contracts,
   per-service CI, Conventional Commits, one PR per slice).
-- Target repository: `git@github.com:marko-spasovski/Inventory-Supply-Management.git`
+- Target repository: `git@github.com:marko-spasovski/polyglot-erp-microservices.git` (renamed from Inventory-Supply-Management on 2026-11-04)
   (public, `main`, admin access confirmed).
 
 > **Scope change, 2026-11-03.** After phases 0–1, the goal was narrowed to a *working, demonstrable*

@@ -1,4 +1,4 @@
-# CI
+# CI workflows
 
 Every workflow follows the same rules (docs/architecture.md, "Pipeline"):
 

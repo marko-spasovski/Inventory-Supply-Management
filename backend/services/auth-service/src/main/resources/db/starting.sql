@@ -1,1 +1,0 @@
-insert into users (id, email, password, role) values ('b352a52d-97f6-448c-aaa1-be5782bad674', 'marko@outlook.com', '$2a$10$S95PilYSZ9qUxHzXW2SnXO1C3WKX5hqFqK8YxtT24x5prjhaBEDI6', 'USER');

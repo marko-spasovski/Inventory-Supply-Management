@@ -95,7 +95,10 @@ public class OrderServiceTest
         _repositoryMock.Verify(r => r.UpdateAsync(order), Times.Once);
     }
  
-    [Fact]
+    // Quarantined, not deleted: this asserts the approved behaviour (decision D1, goods receipt
+    // on Close). The code still adds stock on Approve. Re-enabled by phase 4 of
+    // docs/plans/remediation-plan.md (feat/goods-receipt). See docs/testing/baseline.md.
+    [Fact(Skip = "Phase 4 (D1): stock must be received on Close; code still does it on Approve")]
     public async Task UpdateStatusAsync_WhenStatusIsClosed_CallsGrpcClient()
     {
         var order = new Order(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), 4);

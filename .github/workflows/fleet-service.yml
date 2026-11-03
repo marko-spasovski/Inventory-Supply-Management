@@ -1,0 +1,27 @@
+name: fleet-service
+
+on:
+  push:
+    branches: [main]
+    paths: &paths
+      - backend/services/fleet-service/**
+      - .trivyignore
+      - .github/workflows/fleet-service.yml
+      - .github/workflows/_dotnet-service.yml
+  pull_request:
+    paths: *paths
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fleet-service-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    uses: ./.github/workflows/_dotnet-service.yml
+    with:
+      service: fleet-service
+      path: backend/services/fleet-service
+      test-project: fleet-service.Tests/fleet-service.Tests.csproj

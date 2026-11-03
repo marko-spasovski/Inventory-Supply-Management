@@ -1,15 +1,20 @@
-FROM maven:3.9-eclipse-temurin-21
-
+# syntax=docker/dockerfile:1
+# Multi-stage build: Maven builds the jar, a JRE-only image runs it as a non-root user.
+FROM maven:3.9-eclipse-temurin-21 AS build
 WORKDIR /app
-
-# copy only pom first (cache)
 COPY pom.xml .
-RUN mvn dependency:go-offline
+RUN mvn -q -B dependency:go-offline
+COPY src ./src
+RUN mvn -q -B -DskipTests package
 
-# copy source
-COPY . .
-
+FROM eclipse-temurin:21-jre
+WORKDIR /app
+COPY --from=build /app/target/*.jar app.jar
+# UID 10001, group 0: works on Kubernetes and on OpenShift's arbitrary-UID policy.
+RUN useradd --uid 10001 --gid 0 --no-create-home --shell /usr/sbin/nologin app \
+ && mkdir -p /app/Documents && chown -R 10001:0 /app && chmod -R g=u /app
+USER 10001
+# Size the heap from the container memory limit, not the host's.
+ENV JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=75 -XX:+ExitOnOutOfMemoryError"
 EXPOSE 8084
-
-# THIS is the key part (like dotnet watch)
-CMD ["mvn", "spring-boot:run"]
+ENTRYPOINT ["java", "-jar", "/app/app.jar"]

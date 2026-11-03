@@ -26,7 +26,7 @@ Kafka event, published from a transactional outbox (ADR 003, ADR 004).
 | `backend/services/ai-service` | inventory analytics, reorder suggestions (stateless) | Express/TS |
 | `backend/gateways/web-gateway` | web edge: cookie auth, routing, coarse role checks | Spring Cloud Gateway |
 | `backend/gateways/mobile-gateway` | mobile edge: Bearer auth, response shaping, WebSocket proxy | Express/TS |
-| `frontend/web` | shell (Module Federation host) + 7 remotes | React 18, Vite 5 |
+| `frontend/web` | shell (Module Federation host) + 7 remotes | React 19.1, Vite 5 |
 | `frontend/mobile` | native app | Expo 54 |
 | `frontend/packages` | `api-types` (generated from contracts), `domain` (roles, permission mirror), `i18n` | TypeScript |
 | `contracts/` | OpenAPI per service, `inventory.proto`, event JSON Schemas | |

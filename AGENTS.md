@@ -8,13 +8,13 @@ Read docs/product.md, docs/requirements.md, docs/architecture.md and /contracts 
 The current programme of work is docs/plans/remediation-plan.md (phases 0–10).
 
 ## Stack
-- Java services: Java 21, Spring Boot 3.5, Spring Data JPA, Flyway, Spring Security resource server
+- Java services: Java 21, Spring Boot 3.5 (moving to 4, see the plan), Spring Data JPA, Flyway, Spring Security resource server
   (auth, company, warehouse, inventory) and Spring Cloud Gateway (web-gateway)
 - .NET services: .NET 9, ASP.NET Core, EF Core migrations, JwtBearer (fleet, product, order)
-- Node services: Node 20, TypeScript strict, Express (notification, ai, mobile-gateway)
+- Node services: Node 24 LTS, TypeScript strict, Express (notification, ai, mobile-gateway)
 - Messaging: Kafka (KRaft) for events, gRPC for the synchronous stock command (order → inventory)
 - Database: PostgreSQL, one server, one database and one owner + runtime role per service (ADR 002)
-- Web: React 18 + Vite 5 + Module Federation (shell + 7 remotes), shared packages in frontend/packages
+- Web: React 19.1 (one React version in the whole workspace) + Vite 5 + Module Federation (shell + 7 remotes), shared packages in frontend/packages
 - Mobile: Expo 54 (React Native 0.81), expo-router
 - Infra: Docker, Kubernetes (Kustomize; kind in CI, k3s on the VPS), GitHub Actions, GHCR
 
@@ -26,18 +26,20 @@ scripts/ (local launcher), .github/workflows/.
 
 ## Commands (keep this section accurate; update when scripts change)
 - Host tools are optional: every command below also runs in the pinned container image used by CI
-  (`maven:3.9-eclipse-temurin-21`, `mcr.microsoft.com/dotnet/sdk:9.0`, `node:20.19.4`).
+  (`maven:3.9-eclipse-temurin-21`, `mcr.microsoft.com/dotnet/sdk:9.0`, `node:24`).
 - Whole stack for development: `./run-local.sh` (infrastructure in Docker, apps on the host; see
   docs/LOCAL_DEVELOPMENT.md). Stop with `q`.
 - Java service: `./mvnw test`, `./mvnw verify` (in the service folder).
 - .NET service: `dotnet test` (fleet and product: in `<service>.Tests/`; order:
   `dotnet test order-service.Tests/order-service.Tests.csproj`).
 - Node service: `npm ci`, `npm test`, `npm run build`.
-- Frontend (in `frontend/`): `npm ci`, `npm test --workspaces --if-present`,
+- Frontend (in `frontend/`): `npm ci`, `npm run lint --workspace=@erp/mobile`, `npm test --workspaces --if-present`,
   `npm run build --workspaces --if-present`; web shell dev server `npm run shell`; mobile `npm run mobile`.
 - Launcher tests: `python3 -m unittest discover -s scripts/tests`.
-- Scans (as CI runs them): `gitleaks dir .`, Semgrep with explicit rule packs, `trivy image`,
-  `npm audit --audit-level=critical`.
+- Scans (as CI runs them, pinned images in .github/workflows/): `gitleaks git .` (known historic
+  findings in `.gitleaksignore`), Semgrep with explicit rule packs, `trivy image` (fails on a fixable
+  CRITICAL; time-limited exceptions in `.trivyignore`), `npm audit --omit=dev --audit-level=critical`,
+  actionlint.
 
 ## Non-negotiables
 1. A service owns its data. Never read or write another service's database. Talk only through the

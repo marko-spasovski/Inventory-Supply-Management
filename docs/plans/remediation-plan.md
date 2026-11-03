@@ -169,6 +169,11 @@ Branch `ci/pipelines`
 - `ci: add one path-filtered workflow per service`
 - `ci: add repo checks (gitleaks, Redocly, actionlint, buf)`
 
+Branch `chore/spring-boot-4` (added 2026-11-03)
+- Spring Boot 3.5 is out of OSS support and `spring-webmvc`/`spring-webflux` 6.2 have CRITICAL CVEs fixed
+  only in Spring Framework 7. Migrate the five Spring apps to Spring Boot 4 / Spring Cloud 2025.1 before
+  phase 3, so the security work is written once. Removes the `.trivyignore` exceptions.
+
 Branch `chore/infra-footprint` [R08, R20, R21]
 - `chore: one postgres server with a database and roles per service (db/init)`
 - `chore: kafka in KRaft mode, persistent volume, topics created at start-up`

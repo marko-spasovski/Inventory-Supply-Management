@@ -1,0 +1,27 @@
+name: notification-service
+
+on:
+  push:
+    branches: [main]
+    paths: &paths
+      - backend/services/notification-service/**
+      - .trivyignore
+      - .nvmrc
+      - .github/workflows/notification-service.yml
+      - .github/workflows/_node-service.yml
+  pull_request:
+    paths: *paths
+
+permissions:
+  contents: read
+
+concurrency:
+  group: notification-service-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    uses: ./.github/workflows/_node-service.yml
+    with:
+      service: notification-service
+      path: backend/services/notification-service

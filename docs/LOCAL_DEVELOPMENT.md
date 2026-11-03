@@ -29,7 +29,7 @@ The .NET fallback is automatic. Its dedicated Dockerfile builds from the current
 
 - Linux, macOS, or WSL2 with Bash and Python **3.10+**.
 - Docker Engine/Desktop running, Docker Compose with profiles, and permission to use the Docker daemon. Run the launcher as your normal user, not with `sudo`.
-- Node **20.19.4+** and npm (the frontend lockfile's React Native/Metro engine requirement).
+- Node **24 LTS** (`.nvmrc`; `nvm use`). The launcher refuses anything older than 20.19.4, the frontend lockfile's React Native/Metro minimum, but CI and the images use Node 24.
 - A Java **21+ JDK**, including `javac`. Maven is downloaded through the checked-in wrappers when needed.
 - Optional: .NET **9 SDK**. Without it, the three C# services run in Docker.
 - Internet access on the first run for images, Maven/NuGet, and npm packages.
@@ -84,7 +84,7 @@ Filtering/pausing affects only display. If output is exceptionally busy, screen 
 
 Default startup timeout is 300 seconds per readiness check; default setup timeout is 1800 seconds per install/build. First startup is slower because it downloads/builds dependencies. Later launches reuse Docker/Maven/NuGet caches and Node installations whose manifest fingerprint is unchanged.
 
-Frontend installation uses `npm ci --legacy-peer-deps` to accommodate the existing mixed React/Expo workspace. Backend Node installations use ordinary `npm ci`. Existing lockfiles are not rewritten. `--reinstall` replaces `node_modules`, not application source or data. Do not change dependencies or run another installer in the same checkout while this launcher is installing.
+Frontend installation uses `npm ci --legacy-peer-deps` (also set in `frontend/.npmrc`). Web and mobile share one React version (19.1), so the workspace has a single React. Backend Node installations use ordinary `npm ci`. Existing lockfiles are not rewritten. `--reinstall` replaces `node_modules`, not application source or data. Do not change dependencies or run another installer in the same checkout while this launcher is installing.
 
 ## Web development
 

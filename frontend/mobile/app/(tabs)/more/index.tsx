@@ -5,13 +5,14 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '@/stores/authStore';
 import { sl } from '@/constants/i18n';
-import { useHasFeature } from '@/hooks/useHasFeature';
+import { hasFeature, type FeatureKey } from '@erp/domain';
+import { useRole } from '@/hooks/useRole';
 
 interface MenuEntry {
   label:   string;
   icon:    keyof typeof Ionicons.glyphMap;
   route:   string;
-  feature?: Parameters<typeof useHasFeature>[0];
+  feature?: FeatureKey;
 }
 
 export default function MoreScreen(): React.ReactElement {
@@ -58,7 +59,9 @@ export default function MoreScreen(): React.ReactElement {
 }
 
 function MenuRow({ entry, onPress }: { entry: MenuEntry; onPress: () => void }): React.ReactElement {
-  const allowed = entry.feature ? useHasFeature(entry.feature) : true;
+  // useRole runs on every render (rules of hooks); the feature check itself is plain logic.
+  const role = useRole();
+  const allowed = entry.feature ? hasFeature(role, entry.feature) : true;
   if (!allowed) return <></>;
   return (
     <TouchableOpacity style={styles.menuRow} onPress={onPress}>

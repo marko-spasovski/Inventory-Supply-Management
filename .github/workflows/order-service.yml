@@ -1,0 +1,27 @@
+name: order-service
+
+on:
+  push:
+    branches: [main]
+    paths: &paths
+      - backend/services/order-service/**
+      - .trivyignore
+      - .github/workflows/order-service.yml
+      - .github/workflows/_dotnet-service.yml
+  pull_request:
+    paths: *paths
+
+permissions:
+  contents: read
+
+concurrency:
+  group: order-service-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    uses: ./.github/workflows/_dotnet-service.yml
+    with:
+      service: order-service
+      path: backend/services/order-service
+      test-project: order-service.Tests/order-service.Tests.csproj

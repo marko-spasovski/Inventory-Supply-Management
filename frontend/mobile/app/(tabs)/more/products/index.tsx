@@ -25,17 +25,18 @@ export default function ProductsScreen(): React.ReactElement {
     queryFn:  productsApi.getAllCategories,
   });
 
-  if (isLoading) return <LoadingView />;
-  if (isError)   return <ErrorView onRetry={refetch} />;
-
-  const all = data ?? [];
+  // Hooks run on every render, before any early return (rules of hooks): returning
+  // before useMemo while loading crashed the screen once the data arrived.
   const trimmedSku = skuQuery.trim().toLowerCase();
   const items = useMemo(() => {
-    let list = all;
+    let list = data ?? [];
     if (categoryFilter) list = list.filter((p) => p.categoryId === categoryFilter);
     if (trimmedSku)     list = list.filter((p) => p.sku.toLowerCase().includes(trimmedSku));
     return list;
-  }, [all, categoryFilter, trimmedSku]);
+  }, [data, categoryFilter, trimmedSku]);
+
+  if (isLoading) return <LoadingView />;
+  if (isError)   return <ErrorView onRetry={refetch} />;
 
   return (
     <SafeAreaView style={styles.root}>

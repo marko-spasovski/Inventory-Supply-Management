@@ -1,0 +1,18 @@
+# Accepted vulnerabilities. One entry per CVE: why it cannot be reached here, what removes it,
+# and an expiry date after which CI fails again. Reviewed 2026-11-03.
+#
+# All three are fixed only in Spring Framework 7 (Spring Boot 4). Spring Boot 3.5, which the five
+# Spring apps use, is out of OSS support. Removed by the planned `chore/spring-boot-4` PR
+# (docs/plans/remediation-plan.md, phase 1).
+
+# spring-webmvc: remote code execution through XsltView. No service renders XSLT views; every
+# endpoint returns JSON from @RestController methods.
+CVE-2026-47884 exp:2026-12-31
+
+# spring-webmvc / spring-webflux: stream corruption in Server-Sent Events with view fragments.
+# No service uses SSE or view fragments (realtime goes through notification-service's WebSocket).
+CVE-2026-47890 exp:2026-12-31
+
+# spring-webflux: header predicate bypass in WebFlux functional endpoints (RouterFunction).
+# The web gateway defines no RouterFunction; its routes are Spring Cloud Gateway Path predicates only.
+CVE-2026-47892 exp:2026-12-31

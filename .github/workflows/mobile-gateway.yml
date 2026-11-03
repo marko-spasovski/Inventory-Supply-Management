@@ -1,0 +1,27 @@
+name: mobile-gateway
+
+on:
+  push:
+    branches: [main]
+    paths: &paths
+      - backend/gateways/mobile-gateway/**
+      - .trivyignore
+      - .nvmrc
+      - .github/workflows/mobile-gateway.yml
+      - .github/workflows/_node-service.yml
+  pull_request:
+    paths: *paths
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mobile-gateway-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    uses: ./.github/workflows/_node-service.yml
+    with:
+      service: mobile-gateway
+      path: backend/gateways/mobile-gateway

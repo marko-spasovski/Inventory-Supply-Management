@@ -1,0 +1,26 @@
+name: inventory-service
+
+on:
+  push:
+    branches: [main]
+    paths: &paths
+      - backend/services/inventory-service/**
+      - .trivyignore
+      - .github/workflows/inventory-service.yml
+      - .github/workflows/_java-service.yml
+  pull_request:
+    paths: *paths
+
+permissions:
+  contents: read
+
+concurrency:
+  group: inventory-service-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    uses: ./.github/workflows/_java-service.yml
+    with:
+      service: inventory-service
+      path: backend/services/inventory-service

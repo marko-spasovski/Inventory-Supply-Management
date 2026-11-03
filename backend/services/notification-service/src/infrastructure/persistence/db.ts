@@ -7,6 +7,15 @@ export const pool = new Pool({
   database: config.db.database,
   user:     config.db.user,
   password: config.db.password,
+  connectionTimeoutMillis: 5_000,
+});
+
+// An idle client that loses its connection (database restart, network blip) emits 'error' on the
+// pool. Without a listener Node treats it as unhandled and the whole service exits, dropping any
+// notification in flight. Log it and carry on: the pool reconnects on the next query, and /readyz
+// reports 503 until the database answers again.
+pool.on('error', (err) => {
+  console.error(JSON.stringify({ level: 'ERROR', logger: 'pg-pool', message: 'idle client error', error: err.message }));
 });
 
 export async function initDb(): Promise<void> {

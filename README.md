@@ -2,9 +2,9 @@
 
 > An inventory and supply **ERP**: purchasing, stock, warehouses and a delivery fleet, built as **nine microservices in three languages** (Spring Boot, ASP.NET Core, Express/TypeScript). Two gateways sit in front of the services, a **React micro-frontend** web app and an **Expo** mobile app are the clients, and the services talk over **gRPC** and **Kafka**. It runs with **Docker Compose** and on **Kubernetes**, and every change passes CI gates for tests, SAST, image scanning and secret scanning.
 
-[![e2e](https://github.com/marko-spasovski/Inventory-Supply-Management/actions/workflows/e2e.yml/badge.svg)](https://github.com/marko-spasovski/Inventory-Supply-Management/actions/workflows/e2e.yml)
-[![frontend](https://github.com/marko-spasovski/Inventory-Supply-Management/actions/workflows/frontend.yml/badge.svg)](https://github.com/marko-spasovski/Inventory-Supply-Management/actions/workflows/frontend.yml)
-[![repo-checks](https://github.com/marko-spasovski/Inventory-Supply-Management/actions/workflows/repo-checks.yml/badge.svg)](https://github.com/marko-spasovski/Inventory-Supply-Management/actions/workflows/repo-checks.yml)
+[![e2e](https://github.com/marko-spasovski/polyglot-erp-microservices/actions/workflows/e2e.yml/badge.svg)](https://github.com/marko-spasovski/polyglot-erp-microservices/actions/workflows/e2e.yml)
+[![frontend](https://github.com/marko-spasovski/polyglot-erp-microservices/actions/workflows/frontend.yml/badge.svg)](https://github.com/marko-spasovski/polyglot-erp-microservices/actions/workflows/frontend.yml)
+[![repo-checks](https://github.com/marko-spasovski/polyglot-erp-microservices/actions/workflows/repo-checks.yml/badge.svg)](https://github.com/marko-spasovski/polyglot-erp-microservices/actions/workflows/repo-checks.yml)
 ![Spring Boot](https://img.shields.io/badge/Spring_Boot-3.5-6DB33F?logo=springboot&logoColor=white)
 ![.NET](https://img.shields.io/badge/.NET-9-512BD4?logo=dotnet&logoColor=white)
 ![Node.js](https://img.shields.io/badge/Node.js-24-5FA04E?logo=nodedotjs&logoColor=white)
@@ -309,8 +309,8 @@ polyglot-erp-microservices/
 
 ```bash
 # 1. Clone and start: builds all images and waits for every health check
-git clone https://github.com/marko-spasovski/Inventory-Supply-Management.git
-cd Inventory-Supply-Management
+git clone https://github.com/marko-spasovski/polyglot-erp-microservices.git
+cd polyglot-erp-microservices
 docker compose up --build --wait
 
 # 2. Open the web app and log in
@@ -394,6 +394,7 @@ Each service has its own path-filtered workflow built on a reusable pipeline per
 | [`deploy/k8s/README.md`](deploy/k8s/README.md) | Kubernetes manifests and the kind workflow |
 | [`testing/baseline.md`](docs/testing/baseline.md) | the test baseline and how failing tests were handled |
 | [`LOCAL_DEVELOPMENT.md`](docs/LOCAL_DEVELOPMENT.md) | the hot-reload launcher |
+| [`ci.md`](docs/ci.md) | every CI workflow, its gates and the accepted exceptions |
 | [`PROJECT_REVIEW_AND_DOCUMENTATION.md`](docs/PROJECT_REVIEW_AND_DOCUMENTATION.md) | the full technical review (findings R01–R24) |
 | [`plans/remediation-plan.md`](docs/plans/remediation-plan.md) | the improvement roadmap |
 | [`AGENTS.md`](AGENTS.md) | conventions, commands and non-negotiables for contributors |

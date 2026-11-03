@@ -13,18 +13,18 @@ secretGenerator:
 generatorOptions:
   disableNameSuffixHash: true
 images:
-  - { name: novo-auth-service,         newName: ghcr.io/marko-spasovski/inventory-supply-management/auth-service,         newTag: latest }
-  - { name: novo-company-service,      newName: ghcr.io/marko-spasovski/inventory-supply-management/company-service,      newTag: latest }
-  - { name: novo-warehouse-service,    newName: ghcr.io/marko-spasovski/inventory-supply-management/warehouse-service,    newTag: latest }
-  - { name: novo-inventory-service,    newName: ghcr.io/marko-spasovski/inventory-supply-management/inventory-service,    newTag: latest }
-  - { name: novo-fleet-service,        newName: ghcr.io/marko-spasovski/inventory-supply-management/fleet-service,        newTag: latest }
-  - { name: novo-product-service,      newName: ghcr.io/marko-spasovski/inventory-supply-management/product-service,      newTag: latest }
-  - { name: novo-order-service,        newName: ghcr.io/marko-spasovski/inventory-supply-management/order-service,        newTag: latest }
-  - { name: novo-notification-service, newName: ghcr.io/marko-spasovski/inventory-supply-management/notification-service, newTag: latest }
-  - { name: novo-ai-service,           newName: ghcr.io/marko-spasovski/inventory-supply-management/ai-service,           newTag: latest }
-  - { name: novo-web-gateway,          newName: ghcr.io/marko-spasovski/inventory-supply-management/web-gateway,          newTag: latest }
-  - { name: novo-mobile-gateway,       newName: ghcr.io/marko-spasovski/inventory-supply-management/mobile-gateway,       newTag: latest }
-  - { name: novo-web,                  newName: ghcr.io/marko-spasovski/inventory-supply-management/web,                  newTag: latest }
+  - { name: novo-auth-service,         newName: ghcr.io/marko-spasovski/polyglot-erp-microservices/auth-service,         newTag: latest }
+  - { name: novo-company-service,      newName: ghcr.io/marko-spasovski/polyglot-erp-microservices/company-service,      newTag: latest }
+  - { name: novo-warehouse-service,    newName: ghcr.io/marko-spasovski/polyglot-erp-microservices/warehouse-service,    newTag: latest }
+  - { name: novo-inventory-service,    newName: ghcr.io/marko-spasovski/polyglot-erp-microservices/inventory-service,    newTag: latest }
+  - { name: novo-fleet-service,        newName: ghcr.io/marko-spasovski/polyglot-erp-microservices/fleet-service,        newTag: latest }
+  - { name: novo-product-service,      newName: ghcr.io/marko-spasovski/polyglot-erp-microservices/product-service,      newTag: latest }
+  - { name: novo-order-service,        newName: ghcr.io/marko-spasovski/polyglot-erp-microservices/order-service,        newTag: latest }
+  - { name: novo-notification-service, newName: ghcr.io/marko-spasovski/polyglot-erp-microservices/notification-service, newTag: latest }
+  - { name: novo-ai-service,           newName: ghcr.io/marko-spasovski/polyglot-erp-microservices/ai-service,           newTag: latest }
+  - { name: novo-web-gateway,          newName: ghcr.io/marko-spasovski/polyglot-erp-microservices/web-gateway,          newTag: latest }
+  - { name: novo-mobile-gateway,       newName: ghcr.io/marko-spasovski/polyglot-erp-microservices/mobile-gateway,       newTag: latest }
+  - { name: novo-web,                  newName: ghcr.io/marko-spasovski/polyglot-erp-microservices/web,                  newTag: latest }
 # GHCR images are pulled; always fetch a moved :latest tag.
 patches:
   - target: { kind: Deployment }

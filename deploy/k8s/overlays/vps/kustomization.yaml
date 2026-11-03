@@ -1,0 +1,34 @@
+# Single VPS running k3s (ADR 010). Traefik (bundled with k3s) is the ingress, cert-manager issues
+# Let's Encrypt certificates. Secrets come from secrets.env on the server (never committed; copy
+# secrets.env.example). Images come from GHCR. See docs/operations/vps.md.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../base
+  - ingress.yaml
+secretGenerator:
+  - name: novo-secrets
+    namespace: novo
+    envs: [secrets.env]
+generatorOptions:
+  disableNameSuffixHash: true
+images:
+  - { name: novo-auth-service,         newName: ghcr.io/marko-spasovski/inventory-supply-management/auth-service,         newTag: latest }
+  - { name: novo-company-service,      newName: ghcr.io/marko-spasovski/inventory-supply-management/company-service,      newTag: latest }
+  - { name: novo-warehouse-service,    newName: ghcr.io/marko-spasovski/inventory-supply-management/warehouse-service,    newTag: latest }
+  - { name: novo-inventory-service,    newName: ghcr.io/marko-spasovski/inventory-supply-management/inventory-service,    newTag: latest }
+  - { name: novo-fleet-service,        newName: ghcr.io/marko-spasovski/inventory-supply-management/fleet-service,        newTag: latest }
+  - { name: novo-product-service,      newName: ghcr.io/marko-spasovski/inventory-supply-management/product-service,      newTag: latest }
+  - { name: novo-order-service,        newName: ghcr.io/marko-spasovski/inventory-supply-management/order-service,        newTag: latest }
+  - { name: novo-notification-service, newName: ghcr.io/marko-spasovski/inventory-supply-management/notification-service, newTag: latest }
+  - { name: novo-ai-service,           newName: ghcr.io/marko-spasovski/inventory-supply-management/ai-service,           newTag: latest }
+  - { name: novo-web-gateway,          newName: ghcr.io/marko-spasovski/inventory-supply-management/web-gateway,          newTag: latest }
+  - { name: novo-mobile-gateway,       newName: ghcr.io/marko-spasovski/inventory-supply-management/mobile-gateway,       newTag: latest }
+  - { name: novo-web,                  newName: ghcr.io/marko-spasovski/inventory-supply-management/web,                  newTag: latest }
+# GHCR images are pulled; always fetch a moved :latest tag.
+patches:
+  - target: { kind: Deployment }
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/imagePullPolicy
+        value: Always

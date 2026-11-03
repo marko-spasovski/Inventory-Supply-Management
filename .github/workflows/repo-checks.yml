@@ -16,6 +16,8 @@ concurrency:
 env:
   GITLEAKS_IMAGE: ghcr.io/gitleaks/gitleaks:v8.30.1@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f
   ACTIONLINT_IMAGE: rhysd/actionlint:1.7.12@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667
+  KUBECTL_IMAGE: registry.k8s.io/kubectl:v1.34.1@sha256:59bafa07ff3a6d4b417e7633ddb9d79a9606ca98bf64bac080b3e65748669250
+  KUBECONFORM_IMAGE: ghcr.io/yannh/kubeconform:v0.7.0@sha256:85dbef6b4b312b99133decc9c6fc9495e9fc5f92293d4ff3b7e1b30f5611823c
 
 jobs:
   secrets:
@@ -51,3 +53,21 @@ jobs:
         with:
           persist-credentials: false
       - run: python3 -B -m unittest discover -s scripts/tests -v
+
+  kubernetes:
+    name: Kubernetes manifests (kustomize + kubeconform)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Render and validate both overlays
+        run: |
+          cp deploy/k8s/overlays/vps/secrets.env.example deploy/k8s/overlays/vps/secrets.env
+          for o in local vps; do
+            docker run --rm -v "$PWD:/repo:ro" -w /repo "$KUBECTL_IMAGE" kustomize "deploy/k8s/overlays/$o" > "/tmp/$o.yaml"
+            # cert-manager and Traefik CRDs are not in the default schemas.
+            docker run --rm -v /tmp:/m:ro "$KUBECONFORM_IMAGE" -strict -summary -ignore-missing-schemas \
+              -kubernetes-version 1.34.0 "/m/$o.yaml"
+          done

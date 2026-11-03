@@ -1,0 +1,60 @@
+# ai-service: generated from one definition per service (same settings as docker-compose.yml).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai-service
+  labels: { app: ai-service, tier: backend }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: ai-service }
+  template:
+    metadata:
+      labels: { app: ai-service, tier: backend }
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: ai-service
+          image: novo-ai-service:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - { name: http, containerPort: 8089 }
+          env:
+            - { name: INVENTORY_SERVICE_URL, value: "http://inventory-service:8086" }
+            - { name: WAREHOUSE_SERVICE_URL, value: "http://warehouse-service:8084" }
+            - { name: PRODUCT_SERVICE_URL, value: "http://product-service:8085" }
+          resources:
+            requests: { cpu: 50m, memory: 192Mi }
+            limits: { memory: 192Mi }
+          startupProbe:
+            httpGet: { path: /livez, port: http }
+            periodSeconds: 5
+            failureThreshold: 60
+          livenessProbe:
+            httpGet: { path: /livez, port: http }
+            periodSeconds: 20
+          readinessProbe:
+            httpGet: { path: /readyz, port: http }
+            periodSeconds: 10
+          securityContext:
+            runAsUser: 1000
+            runAsGroup: 1000
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }
+      volumes:
+        - { name: tmp, emptyDir: {} }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ai-service
+spec:
+  selector: { app: ai-service }
+  ports:
+    - { name: http, port: 8089, targetPort: http }

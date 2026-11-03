@@ -1,0 +1,59 @@
+# product-service: generated from one definition per service (same settings as docker-compose.yml).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: product-service
+  labels: { app: product-service, tier: backend }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: product-service }
+  template:
+    metadata:
+      labels: { app: product-service, tier: backend }
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: product-service
+          image: novo-product-service:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - { name: http, containerPort: 8085 }
+          env:
+            - name: DB_PASSWORD
+              valueFrom: { secretKeyRef: { name: novo-secrets, key: service-db-password } }
+            - { name: ASPNETCORE_ENVIRONMENT, value: "Development" }
+            - { name: ConnectionStrings__DefaultConnection, value: "Host=postgres;Port=5432;Database=products;Username=products_svc;Password=$(DB_PASSWORD)" }
+          resources:
+            requests: { cpu: 50m, memory: 256Mi }
+            limits: { memory: 256Mi }
+          startupProbe:
+            httpGet: { path: /livez, port: http }
+            periodSeconds: 5
+            failureThreshold: 60
+          livenessProbe:
+            httpGet: { path: /livez, port: http }
+            periodSeconds: 20
+          readinessProbe:
+            httpGet: { path: /readyz, port: http }
+            periodSeconds: 10
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            capabilities: { drop: [ALL] }
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }
+      volumes:
+        - { name: tmp, emptyDir: {} }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: product-service
+spec:
+  selector: { app: product-service }
+  ports:
+    - { name: http, port: 8085, targetPort: http }

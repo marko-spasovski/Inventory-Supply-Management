@@ -45,3 +45,6 @@ docker-data/
 # Playwright output
 **/test-results/
 **/playwright-report/
+
+# Kubernetes secrets for the VPS overlay
+deploy/k8s/overlays/vps/secrets.env

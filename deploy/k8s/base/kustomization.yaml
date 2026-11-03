@@ -1,0 +1,23 @@
+# Kustomize base: the whole system (ADR 010). Overlays: local (kind) and vps (k3s).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: novo
+labels:
+  - pairs: { app.kubernetes.io/part-of: novo }
+resources:
+  - namespace.yaml
+  - network-policies.yaml
+  - postgres.yaml
+  - kafka.yaml
+  - auth-service.yaml
+  - company-service.yaml
+  - warehouse-service.yaml
+  - inventory-service.yaml
+  - fleet-service.yaml
+  - product-service.yaml
+  - order-service.yaml
+  - notification-service.yaml
+  - ai-service.yaml
+  - web-gateway.yaml
+  - mobile-gateway.yaml
+  - web.yaml

@@ -1,0 +1,81 @@
+# inventory-service: generated from one definition per service (same settings as docker-compose.yml).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: inventory-service
+  labels: { app: inventory-service, tier: backend }
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate   # the documents volume is ReadWriteOnce (ADR 009)
+  selector:
+    matchLabels: { app: inventory-service }
+  template:
+    metadata:
+      labels: { app: inventory-service, tier: backend }
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: inventory-service
+          image: novo-inventory-service:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - { name: http, containerPort: 8086 }
+            - { name: grpc, containerPort: 9090 }
+          env:
+            - name: SPRING_DATASOURCE_PASSWORD
+              valueFrom: { secretKeyRef: { name: novo-secrets, key: service-db-password } }
+            - { name: SPRING_PROFILES_ACTIVE, value: "dev" }
+            - { name: SPRING_KAFKA_BOOTSTRAP_SERVERS, value: "kafka:9092" }
+            - { name: SPRING_JPA_SHOW_SQL, value: "false" }
+            - { name: SPRING_DEVTOOLS_RESTART_ENABLED, value: "false" }
+            - { name: SPRING_DATASOURCE_URL, value: "jdbc:postgresql://postgres:5432/inventory" }
+            - { name: SPRING_DATASOURCE_USERNAME, value: "inventory_svc" }
+            - { name: INVENTORY_DOCS_PATH, value: "/app/Documents/consumptions" }
+          resources:
+            requests: { cpu: 50m, memory: 512Mi }
+            limits: { memory: 512Mi }
+          startupProbe:
+            httpGet: { path: /livez, port: http }
+            periodSeconds: 5
+            failureThreshold: 60
+          livenessProbe:
+            httpGet: { path: /livez, port: http }
+            periodSeconds: 20
+          readinessProbe:
+            httpGet: { path: /readyz, port: http }
+            periodSeconds: 10
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            capabilities: { drop: [ALL] }
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }
+            - { name: documents, mountPath: /app/Documents }
+      volumes:
+        - { name: tmp, emptyDir: {} }
+        - name: documents
+          persistentVolumeClaim: { claimName: inventory-documents }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: inventory-service
+spec:
+  selector: { app: inventory-service }
+  ports:
+    - { name: http, port: 8086, targetPort: http }
+    - { name: grpc, port: 9090, targetPort: grpc }
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: inventory-documents
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 1Gi

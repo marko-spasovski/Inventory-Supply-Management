@@ -1,0 +1,69 @@
+# auth-service: generated from one definition per service (same settings as docker-compose.yml).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: auth-service
+  labels: { app: auth-service, tier: backend }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: auth-service }
+  template:
+    metadata:
+      labels: { app: auth-service, tier: backend }
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: auth-service
+          image: novo-auth-service:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - { name: http, containerPort: 8081 }
+          env:
+            - name: SPRING_DATASOURCE_PASSWORD
+              valueFrom: { secretKeyRef: { name: novo-secrets, key: service-db-password } }
+            - name: JWT_SECRET
+              valueFrom: { secretKeyRef: { name: novo-secrets, key: jwt-secret } }
+            - name: AUTH_BOOTSTRAP_ADMIN_EMAIL
+              valueFrom: { secretKeyRef: { name: novo-secrets, key: bootstrap-admin-email } }
+            - name: AUTH_BOOTSTRAP_ADMIN_PASSWORD
+              valueFrom: { secretKeyRef: { name: novo-secrets, key: bootstrap-admin-password } }
+            - { name: SPRING_PROFILES_ACTIVE, value: "dev" }
+            - { name: SPRING_KAFKA_BOOTSTRAP_SERVERS, value: "kafka:9092" }
+            - { name: SPRING_JPA_SHOW_SQL, value: "false" }
+            - { name: SPRING_DEVTOOLS_RESTART_ENABLED, value: "false" }
+            - { name: SPRING_DATASOURCE_URL, value: "jdbc:postgresql://postgres:5432/users" }
+            - { name: SPRING_DATASOURCE_USERNAME, value: "users_svc" }
+          resources:
+            requests: { cpu: 50m, memory: 512Mi }
+            limits: { memory: 512Mi }
+          startupProbe:
+            httpGet: { path: /livez, port: http }
+            periodSeconds: 5
+            failureThreshold: 60
+          livenessProbe:
+            httpGet: { path: /livez, port: http }
+            periodSeconds: 20
+          readinessProbe:
+            httpGet: { path: /readyz, port: http }
+            periodSeconds: 10
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            capabilities: { drop: [ALL] }
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }
+      volumes:
+        - { name: tmp, emptyDir: {} }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: auth-service
+spec:
+  selector: { app: auth-service }
+  ports:
+    - { name: http, port: 8081, targetPort: http }

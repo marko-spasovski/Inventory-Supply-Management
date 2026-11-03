@@ -1,0 +1,32 @@
+# Default deny for incoming traffic, then allow only what the architecture needs (docs/architecture.md).
+# (Enforced by CNIs that support NetworkPolicy, e.g. k3s's default flannel + kube-router policy controller.)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+spec:
+  podSelector: {}
+  policyTypes: [Ingress]
+---
+# Pods in this namespace may call each other (gateways -> services, order -> inventory gRPC, all -> Kafka/Postgres).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-same-namespace
+spec:
+  podSelector: {}
+  ingress:
+    - from:
+        - podSelector: {}
+---
+# The ingress controller (any namespace) may reach only the edge: web and the two gateways.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-ingress-to-edge
+spec:
+  podSelector:
+    matchLabels: { tier: edge }
+  ingress:
+    - from:
+        - namespaceSelector: {}

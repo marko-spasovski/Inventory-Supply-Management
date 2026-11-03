@@ -1,0 +1,98 @@
+# PostgreSQL: one server, one database and owner role per service (ADR 002).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-init
+data:
+  01-service-databases.sh: |
+    #!/bin/sh
+    # One PostgreSQL server, one database and one login role per service (ADR 002).
+    # Runs once, on an empty data volume (docker-entrypoint-initdb.d). A service's role owns only its
+    # own database and cannot connect to any other: data ownership is enforced by the server.
+    #
+    # Password for each role: <SERVICE>_DB_PASSWORD if set (e.g. ORDERS_DB_PASSWORD), otherwise
+    # SERVICE_DB_PASSWORD. Local development only uses the second; Kubernetes sets one per service.
+    set -eu
+
+    for db in users companies fleet warehouses products inventory orders notifications; do
+      role="${db}_svc"
+      var="$(echo "$db" | tr '[:lower:]' '[:upper:]')_DB_PASSWORD"
+      eval "password=\${$var:-\${SERVICE_DB_PASSWORD:?SERVICE_DB_PASSWORD is required}}"
+      psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname postgres \
+           -v role="$role" -v db="$db" -v pw="$password" <<'SQL'
+    CREATE ROLE :"role" LOGIN PASSWORD :'pw';
+    CREATE DATABASE :"db" OWNER :"role";
+    REVOKE CONNECT ON DATABASE :"db" FROM PUBLIC;
+    GRANT CONNECT ON DATABASE :"db" TO :"role";
+    SQL
+      echo "created database $db with owner $role"
+    done
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+  labels: { app: postgres, tier: data }
+spec:
+  serviceName: postgres
+  replicas: 1
+  selector:
+    matchLabels: { app: postgres }
+  template:
+    metadata:
+      labels: { app: postgres, tier: data }
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsUser: 70        # postgres user in the alpine image
+        runAsGroup: 70
+        fsGroup: 70
+        runAsNonRoot: true
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          ports:
+            - { name: pg, containerPort: 5432 }
+          env:
+            - { name: POSTGRES_USER, value: postgres }
+            - { name: POSTGRES_DB, value: postgres }
+            - { name: PGDATA, value: /var/lib/postgresql/data/pgdata }
+            - name: POSTGRES_PASSWORD
+              valueFrom: { secretKeyRef: { name: novo-secrets, key: postgres-password } }
+            - name: SERVICE_DB_PASSWORD
+              valueFrom: { secretKeyRef: { name: novo-secrets, key: service-db-password } }
+          readinessProbe:
+            exec: { command: ["pg_isready", "-U", "postgres", "-d", "notifications"] }
+            periodSeconds: 5
+          resources:
+            requests: { cpu: 50m, memory: 256Mi }
+            limits: { memory: 512Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: [ALL] }
+          volumeMounts:
+            - { name: data, mountPath: /var/lib/postgresql/data }
+            - { name: init, mountPath: /docker-entrypoint-initdb.d, readOnly: true }
+            - { name: run, mountPath: /var/run/postgresql }
+      volumes:
+        - name: init
+          configMap: { name: postgres-init, defaultMode: 0555 }
+        - { name: run, emptyDir: {} }
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: [ReadWriteOnce]
+        resources:
+          requests:
+            storage: 2Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+spec:
+  selector: { app: postgres }
+  ports:
+    - { name: pg, port: 5432, targetPort: pg }

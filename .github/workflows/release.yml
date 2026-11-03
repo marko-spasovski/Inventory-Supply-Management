@@ -1,0 +1,61 @@
+# Build every image on push to main and publish it to GHCR (ADR 011), tagged :latest and :<sha>.
+# The VPS overlay (deploy/k8s/overlays/vps) pulls these. Uses the workflow's own GITHUB_TOKEN.
+name: release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  images:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: auth-service,         context: backend/services/auth-service,         file: Dockerfile }
+          - { name: company-service,      context: backend/services/company-service,      file: Dockerfile }
+          - { name: warehouse-service,    context: backend/services/warehouse-service,    file: Dockerfile }
+          - { name: inventory-service,    context: backend/services/inventory-service,    file: Dockerfile }
+          - { name: fleet-service,        context: backend/services/fleet-service,        file: Dockerfile }
+          - { name: product-service,      context: backend/services/product-service,      file: Dockerfile }
+          - { name: order-service,        context: backend/services/order-service,        file: Dockerfile }
+          - { name: notification-service, context: backend/services/notification-service, file: Dockerfile }
+          - { name: ai-service,           context: backend/services/ai-service,           file: Dockerfile }
+          - { name: web-gateway,          context: backend/gateways/web-gateway,          file: Dockerfile }
+          - { name: mobile-gateway,       context: backend/gateways/mobile-gateway,       file: Dockerfile }
+          - { name: web,                  context: frontend,                              file: web/Dockerfile }
+    env:
+      NAME: ${{ matrix.name }}
+      CONTEXT: ${{ matrix.context }}
+      FILE: ${{ matrix.file }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Log in to GHCR
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ACTOR: ${{ github.actor }}
+        run: echo "$TOKEN" | docker login ghcr.io -u "$ACTOR" --password-stdin
+
+      - name: Build and push
+        run: |
+          repo="ghcr.io/${GITHUB_REPOSITORY,,}/$NAME"
+          docker build -t "$repo:latest" -t "$repo:${GITHUB_SHA::7}" -f "$CONTEXT/$FILE" "$CONTEXT"
+          docker push "$repo:latest"
+          docker push "$repo:${GITHUB_SHA::7}"
+          echo "| $NAME | \`$repo:${GITHUB_SHA::7}\` |" >> "$GITHUB_STEP_SUMMARY"

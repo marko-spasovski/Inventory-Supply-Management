@@ -1,0 +1,18 @@
+# Local cluster (kind) and the CI e2e job. Uses the images built by `docker compose build`
+# (novo-<service>:latest), loaded with `kind load docker-image`. See deploy/k8s/README.md.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../base
+# Local-only values, same as docker-compose.yml. Never use these anywhere else.
+secretGenerator:
+  - name: novo-secrets
+    namespace: novo
+    literals:
+      - jwt-secret=local-development-only-signing-secret-0000
+      - postgres-password=postgres-local-only
+      - service-db-password=service-local-only
+      - bootstrap-admin-email=admin@novo.local
+      - bootstrap-admin-password=admin-local-only
+generatorOptions:
+  disableNameSuffixHash: true

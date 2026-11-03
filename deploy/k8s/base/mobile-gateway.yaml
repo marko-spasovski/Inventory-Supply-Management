@@ -1,0 +1,70 @@
+# mobile-gateway: generated from one definition per service (same settings as docker-compose.yml).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mobile-gateway
+  labels: { app: mobile-gateway, tier: edge }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: mobile-gateway }
+  template:
+    metadata:
+      labels: { app: mobile-gateway, tier: edge }
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: mobile-gateway
+          image: novo-mobile-gateway:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - { name: http, containerPort: 8090 }
+          env:
+            - name: JWT_SECRET
+              valueFrom: { secretKeyRef: { name: novo-secrets, key: jwt-secret } }
+            - { name: PORT, value: "8090" }
+            - { name: AUTH_SERVICE_URL, value: "http://auth-service:8081" }
+            - { name: COMPANY_SERVICE_URL, value: "http://company-service:8082" }
+            - { name: FLEET_SERVICE_URL, value: "http://fleet-service:8083" }
+            - { name: WAREHOUSE_SERVICE_URL, value: "http://warehouse-service:8084" }
+            - { name: PRODUCT_SERVICE_URL, value: "http://product-service:8085" }
+            - { name: INVENTORY_SERVICE_URL, value: "http://inventory-service:8086" }
+            - { name: ORDER_SERVICE_URL, value: "http://order-service:8087" }
+            - { name: NOTIFICATION_SERVICE_URL, value: "http://notification-service:8088" }
+            - { name: NOTIFICATION_WS_URL, value: "ws://notification-service:9091" }
+            - { name: AI_SERVICE_URL, value: "http://ai-service:8089" }
+          resources:
+            requests: { cpu: 50m, memory: 192Mi }
+            limits: { memory: 192Mi }
+          startupProbe:
+            httpGet: { path: /livez, port: http }
+            periodSeconds: 5
+            failureThreshold: 60
+          livenessProbe:
+            httpGet: { path: /livez, port: http }
+            periodSeconds: 20
+          readinessProbe:
+            httpGet: { path: /readyz, port: http }
+            periodSeconds: 10
+          securityContext:
+            runAsUser: 1000
+            runAsGroup: 1000
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }
+      volumes:
+        - { name: tmp, emptyDir: {} }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mobile-gateway
+spec:
+  selector: { app: mobile-gateway }
+  ports:
+    - { name: http, port: 8090, targetPort: http }

@@ -24,8 +24,8 @@ export default defineConfig({
         productsMf:    remote('VITE_PRODUCTS_MF_URL',   'http://localhost:3007/assets/remoteEntry.js'),
       },
       shared: {
-        react:            { singleton: true, requiredVersion: '^18.3.1' },
-        'react-dom':      { singleton: true, requiredVersion: '^18.3.1' },
+        react:            { singleton: true, requiredVersion: '^19.1.0' },
+        'react-dom':      { singleton: true, requiredVersion: '^19.1.0' },
         'react-router-dom': { singleton: true, requiredVersion: '^6.28.0' },
       },
     }),

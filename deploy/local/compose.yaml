@@ -1,0 +1,162 @@
+# Used ONLY by run-local.sh (via scripts/run_local.py). Separate volumes/project from deploy/docker/compose.yaml.
+# PostgreSQL + Kafka belong in containers; application code normally runs on host.
+x-db: &db
+  image: postgres:16-alpine
+  environment: &db-env
+    POSTGRES_USER: ${NOVO_DB_USER:-administrator}
+    POSTGRES_PASSWORD: ${NOVO_DB_PASSWORD:-administrator123}
+  healthcheck:
+    test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+    interval: 3s
+    timeout: 3s
+    retries: 30
+  stop_grace_period: 15s
+
+x-dotnet: &dotnet
+  profiles: [dotnet]
+  extra_hosts:
+    - "host.docker.internal:host-gateway"
+  stop_grace_period: 15s
+
+services:
+  auth-db:
+    <<: *db
+    environment: { <<: *db-env, POSTGRES_DB: users }
+    ports: ["127.0.0.1:5432:5432"]
+    volumes: ["auth-data:/var/lib/postgresql/data"]
+  company-db:
+    <<: *db
+    environment: { <<: *db-env, POSTGRES_DB: companies }
+    ports: ["127.0.0.1:5433:5432"]
+    volumes: ["company-data:/var/lib/postgresql/data"]
+  fleet-db:
+    <<: *db
+    environment: { <<: *db-env, POSTGRES_DB: fleet }
+    ports: ["127.0.0.1:5434:5432"]
+    volumes: ["fleet-data:/var/lib/postgresql/data"]
+  warehouse-db:
+    <<: *db
+    environment: { <<: *db-env, POSTGRES_DB: warehouses }
+    ports: ["127.0.0.1:5435:5432"]
+    volumes: ["warehouse-data:/var/lib/postgresql/data"]
+  product-db:
+    <<: *db
+    environment: { <<: *db-env, POSTGRES_DB: products }
+    ports: ["127.0.0.1:5436:5432"]
+    volumes: ["product-data:/var/lib/postgresql/data"]
+  inventory-db:
+    <<: *db
+    environment: { <<: *db-env, POSTGRES_DB: inventory }
+    ports: ["127.0.0.1:5437:5432"]
+    volumes: ["inventory-data:/var/lib/postgresql/data"]
+  order-db:
+    <<: *db
+    environment: { <<: *db-env, POSTGRES_DB: orders }
+    ports: ["127.0.0.1:5438:5432"]
+    volumes: ["order-data:/var/lib/postgresql/data"]
+  notification-db:
+    <<: *db
+    environment: { <<: *db-env, POSTGRES_DB: notifications }
+    ports: ["127.0.0.1:5439:5432"]
+    volumes: ["notification-data:/var/lib/postgresql/data"]
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.6.1
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    volumes:
+      - zk-data:/var/lib/zookeeper/data
+      - zk-log:/var/lib/zookeeper/log
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "2181"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  kafka:
+    image: confluentinc/cp-kafka:7.6.1
+    depends_on:
+      zookeeper: { condition: service_healthy }
+    ports: ["127.0.0.1:9092:9092"]
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENERS: INTERNAL://0.0.0.0:29092,EXTERNAL://0.0.0.0:9092
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:29092,EXTERNAL://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_NUM_PARTITIONS: 3
+      KAFKA_HEAP_OPTS: "-Xms256m -Xmx512m"
+    volumes: ["kafka-data:/var/lib/kafka/data"]
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:29092"]
+      interval: 5s
+      timeout: 10s
+      retries: 30
+      start_period: 15s
+
+  fleet-service:
+    <<: *dotnet
+    build:
+      context: ../..
+      dockerfile: deploy/local/Dockerfile.dotnet
+      args: { SERVICE: fleet-service }
+    ports: ["127.0.0.1:8083:8083"]
+    environment:
+      ASPNETCORE_URLS: http://+:8083
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__DefaultConnection: "Host=fleet-db;Port=5432;Database=fleet;Username=${NOVO_DB_USER:-administrator};Password=${NOVO_DB_PASSWORD:-administrator123}"
+    depends_on:
+      fleet-db: { condition: service_healthy }
+
+  product-service:
+    <<: *dotnet
+    build:
+      context: ../..
+      dockerfile: deploy/local/Dockerfile.dotnet
+      args: { SERVICE: product-service }
+    ports: ["127.0.0.1:8085:8085"]
+    environment:
+      ASPNETCORE_URLS: http://+:8085
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__DefaultConnection: "Host=product-db;Port=5432;Database=products;Username=${NOVO_DB_USER:-administrator};Password=${NOVO_DB_PASSWORD:-administrator123}"
+    depends_on:
+      product-db: { condition: service_healthy }
+
+  order-service:
+    <<: *dotnet
+    build:
+      context: ../..
+      dockerfile: deploy/local/Dockerfile.dotnet
+      args: { SERVICE: order-service }
+    ports: ["127.0.0.1:8087:8087"]
+    environment:
+      ASPNETCORE_URLS: http://+:8087
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__DefaultConnection: "Host=order-db;Port=5432;Database=orders;Username=${NOVO_DB_USER:-administrator};Password=${NOVO_DB_PASSWORD:-administrator123}"
+      Kafka__BootstrapServers: kafka:29092
+      INVENTORY_GRPC_URL: http://host.docker.internal:9090
+      DocumentStorage__BasePath: /documents
+    volumes: ["order-documents:/documents"]
+    depends_on:
+      order-db: { condition: service_healthy }
+      kafka: { condition: service_healthy }
+
+volumes:
+  auth-data:
+  company-data:
+  fleet-data:
+  warehouse-data:
+  product-data:
+  inventory-data:
+  order-data:
+  notification-data:
+  zk-data:
+  zk-log:
+  kafka-data:
+  order-documents:

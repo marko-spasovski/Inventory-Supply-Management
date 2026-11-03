@@ -1,0 +1,13 @@
+.git
+.local-run
+**/node_modules
+**/target
+**/bin
+**/obj
+**/dist
+**/.idea
+**/.expo
+**/Documents
+**/.env
+**/.env.*
+**/__pycache__

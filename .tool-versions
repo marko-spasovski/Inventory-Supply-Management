@@ -1,0 +1,4 @@
+java temurin-21
+nodejs 20.19.4
+dotnet 9.0
+maven 3.9

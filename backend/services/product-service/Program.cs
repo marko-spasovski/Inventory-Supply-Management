@@ -74,6 +74,9 @@ public class Program
             });
         });
         
+        // /livez: the process is up. /readyz: it can reach its database (Kubernetes probes, compose healthcheck).
+        builder.Services.AddHealthChecks().AddDbContextCheck<ProductDbContext>("database", tags: new[] { "ready" });
+
         var app = builder.Build();
 
         // Apply EF Core migrations on startup so the schema exists in a fresh
@@ -94,6 +97,8 @@ public class Program
             });
         }
         
+        app.MapHealthChecks("/livez", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions { Predicate = _ => false });
+        app.MapHealthChecks("/readyz", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions { Predicate = c => c.Tags.Contains("ready") });
         app.MapControllers();
         app.UseCors("AllowAngular");
         app.Run();

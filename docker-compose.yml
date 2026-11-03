@@ -1,0 +1,298 @@
+# The whole system in containers: one tested recipe (R08).
+#   cp .env.example .env        # optional; local defaults work without it
+#   docker compose up --build --wait
+#   web: http://localhost:3000   web API: http://localhost:8080   mobile API: http://localhost:8090
+#
+# Same images as Kubernetes (deploy/k8s). Only the web entry point and the two gateways are published,
+# on 127.0.0.1 only; databases, Kafka and services stay on the private network.
+# Memory limits mirror the VPS budget (docs/plans/remediation-plan.md, phase 9).
+# For fast development with hot reload, use ./run-local.sh instead (deploy/local/compose.yaml).
+
+name: novo
+
+x-java: &java
+  restart: unless-stopped
+  mem_limit: 512m
+  depends_on:
+    postgres: { condition: service_healthy }
+    kafka-init: { condition: service_completed_successfully }
+  environment: &java-env
+    SPRING_PROFILES_ACTIVE: dev
+    SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    SPRING_JPA_SHOW_SQL: "false"
+    SPRING_DEVTOOLS_RESTART_ENABLED: "false"
+
+x-dotnet: &dotnet
+  restart: unless-stopped
+  mem_limit: 256m
+  depends_on:
+    postgres: { condition: service_healthy }
+    kafka-init: { condition: service_completed_successfully }
+
+x-node: &node
+  restart: unless-stopped
+  mem_limit: 192m
+
+# HTTP readiness check without curl: the JRE and ASP.NET images have bash but no HTTP client.
+x-bash-ready: &bash-ready
+  interval: 5s
+  timeout: 3s
+  retries: 60
+  start_period: 20s
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    mem_limit: 512m
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres-local-only}
+      POSTGRES_DB: postgres
+      SERVICE_DB_PASSWORD: ${SERVICE_DB_PASSWORD:-service-local-only}
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d notifications"]
+      interval: 3s
+      timeout: 3s
+      retries: 40
+
+  kafka:
+    image: apache/kafka:3.9.1
+    restart: unless-stopped
+    mem_limit: 1g
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_NUM_PARTITIONS: 3
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      KAFKA_HEAP_OPTS: -Xmx512m -Xms256m
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 >/dev/null 2>&1"]
+      interval: 5s
+      timeout: 10s
+      retries: 40
+
+  # Topics are created explicitly (auto-creation is off), then this container exits.
+  kafka-init:
+    image: apache/kafka:3.9.1
+    depends_on:
+      kafka: { condition: service_healthy }
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -e
+        for t in order.created order.status.changed inventory.stock.updated inventory.low inventory.out warehouse.capacity; do
+          /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists \
+            --topic "$$t" --partitions 3 --replication-factor 1
+        done
+
+  # ── Spring Boot services ──────────────────────────────────────────────────
+  auth-service:
+    <<: *java
+    build: ./backend/services/auth-service
+    environment:
+      <<: *java-env
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/users
+      SPRING_DATASOURCE_USERNAME: users_svc
+      SPRING_DATASOURCE_PASSWORD: ${SERVICE_DB_PASSWORD:-service-local-only}
+    healthcheck:
+      <<: *bash-ready
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8081 && printf 'GET /readyz HTTP/1.0\\r\\n\\r\\n' >&3 && head -1 <&3 | grep -q ' 200 '"]
+
+  company-service:
+    <<: *java
+    build: ./backend/services/company-service
+    environment:
+      <<: *java-env
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/companies
+      SPRING_DATASOURCE_USERNAME: companies_svc
+      SPRING_DATASOURCE_PASSWORD: ${SERVICE_DB_PASSWORD:-service-local-only}
+    healthcheck:
+      <<: *bash-ready
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8082 && printf 'GET /readyz HTTP/1.0\\r\\n\\r\\n' >&3 && head -1 <&3 | grep -q ' 200 '"]
+
+  warehouse-service:
+    <<: *java
+    build: ./backend/services/warehouse-service
+    environment:
+      <<: *java-env
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/warehouses
+      SPRING_DATASOURCE_USERNAME: warehouses_svc
+      SPRING_DATASOURCE_PASSWORD: ${SERVICE_DB_PASSWORD:-service-local-only}
+    healthcheck:
+      <<: *bash-ready
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8084 && printf 'GET /readyz HTTP/1.0\\r\\n\\r\\n' >&3 && head -1 <&3 | grep -q ' 200 '"]
+
+  inventory-service:
+    <<: *java
+    build: ./backend/services/inventory-service
+    environment:
+      <<: *java-env
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/inventory
+      SPRING_DATASOURCE_USERNAME: inventory_svc
+      SPRING_DATASOURCE_PASSWORD: ${SERVICE_DB_PASSWORD:-service-local-only}
+      INVENTORY_DOCS_PATH: /app/Documents/consumptions
+    volumes:
+      - inventory-documents:/app/Documents
+    healthcheck:
+      <<: *bash-ready
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8086 && printf 'GET /readyz HTTP/1.0\\r\\n\\r\\n' >&3 && head -1 <&3 | grep -q ' 200 '"]
+
+  # ── ASP.NET Core services (they apply their EF Core migrations at start-up) ─
+  fleet-service:
+    <<: *dotnet
+    build: ./backend/services/fleet-service
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=fleet;Username=fleet_svc;Password=${SERVICE_DB_PASSWORD:-service-local-only}
+    healthcheck:
+      <<: *bash-ready
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8083 && printf 'GET /readyz HTTP/1.0\\r\\n\\r\\n' >&3 && head -1 <&3 | grep -q ' 200 '"]
+
+  product-service:
+    <<: *dotnet
+    build: ./backend/services/product-service
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=products;Username=products_svc;Password=${SERVICE_DB_PASSWORD:-service-local-only}
+    healthcheck:
+      <<: *bash-ready
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8085 && printf 'GET /readyz HTTP/1.0\\r\\n\\r\\n' >&3 && head -1 <&3 | grep -q ' 200 '"]
+
+  order-service:
+    <<: *dotnet
+    build: ./backend/services/order-service
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=orders;Username=orders_svc;Password=${SERVICE_DB_PASSWORD:-service-local-only}
+      Kafka__BootstrapServers: kafka:9092
+      INVENTORY_GRPC_URL: http://inventory-service:9090
+      DocumentStorage__BasePath: /app/Documents
+    volumes:
+      - order-documents:/app/Documents
+    depends_on:
+      postgres: { condition: service_healthy }
+      kafka-init: { condition: service_completed_successfully }
+      inventory-service: { condition: service_healthy }
+    healthcheck:
+      <<: *bash-ready
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8087 && printf 'GET /readyz HTTP/1.0\\r\\n\\r\\n' >&3 && head -1 <&3 | grep -q ' 200 '"]
+
+  # ── Node services ─────────────────────────────────────────────────────────
+  notification-service:
+    <<: *node
+    build: ./backend/services/notification-service
+    environment:
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_NAME: notifications
+      DB_USER: notifications_svc
+      DB_PASSWORD: ${SERVICE_DB_PASSWORD:-service-local-only}
+      KAFKA_BROKERS: kafka:9092
+      # Shared development secret until phase 3 (ES256 + JWKS, ADR 005).
+      JWT_SECRET: ${JWT_SECRET:-ewzqAN2z1bq7yYFcN3/KId4wbohavFXxHE7nnr82lZE=}
+    depends_on:
+      postgres: { condition: service_healthy }
+      kafka-init: { condition: service_completed_successfully }
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8088/readyz >/dev/null"]
+      interval: 5s
+      timeout: 3s
+      retries: 40
+
+  ai-service:
+    <<: *node
+    build: ./backend/services/ai-service
+    environment:
+      INVENTORY_SERVICE_URL: http://inventory-service:8086
+      WAREHOUSE_SERVICE_URL: http://warehouse-service:8084
+      PRODUCT_SERVICE_URL: http://product-service:8085
+      AZURE_OPENAI_ENDPOINT: ${AZURE_OPENAI_ENDPOINT:-}
+      AZURE_OPENAI_API_KEY: ${AZURE_OPENAI_API_KEY:-}
+      AZURE_OPENAI_DEPLOYMENT: ${AZURE_OPENAI_DEPLOYMENT:-}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8089/readyz >/dev/null"]
+      interval: 5s
+      timeout: 3s
+      retries: 40
+
+  # ── Gateways ──────────────────────────────────────────────────────────────
+  web-gateway:
+    <<: *java
+    build: ./backend/gateways/web-gateway
+    ports: ["127.0.0.1:8080:8080"]
+    environment:
+      SPRING_PROFILES_ACTIVE: dev
+      AUTH_SERVICE_URL: http://auth-service:8081
+      COMPANY_SERVICE_URL: http://company-service:8082
+      FLEET_SERVICE_URL: http://fleet-service:8083
+      WAREHOUSE_SERVICE_URL: http://warehouse-service:8084
+      PRODUCT_SERVICE_URL: http://product-service:8085
+      INVENTORY_SERVICE_URL: http://inventory-service:8086
+      ORDER_SERVICE_URL: http://order-service:8087
+      NOTIFICATION_SERVICE_URL: http://notification-service:8088
+    depends_on:
+      auth-service: { condition: service_healthy }
+    healthcheck:
+      <<: *bash-ready
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /readyz HTTP/1.0\\r\\n\\r\\n' >&3 && head -1 <&3 | grep -q ' 200 '"]
+
+  mobile-gateway:
+    <<: *node
+    build: ./backend/gateways/mobile-gateway
+    ports: ["127.0.0.1:8090:8090"]
+    environment:
+      PORT: "8090"
+      JWT_SECRET: ${JWT_SECRET:-ewzqAN2z1bq7yYFcN3/KId4wbohavFXxHE7nnr82lZE=}
+      AUTH_SERVICE_URL: http://auth-service:8081
+      COMPANY_SERVICE_URL: http://company-service:8082
+      FLEET_SERVICE_URL: http://fleet-service:8083
+      WAREHOUSE_SERVICE_URL: http://warehouse-service:8084
+      PRODUCT_SERVICE_URL: http://product-service:8085
+      INVENTORY_SERVICE_URL: http://inventory-service:8086
+      ORDER_SERVICE_URL: http://order-service:8087
+      NOTIFICATION_SERVICE_URL: http://notification-service:8088
+      NOTIFICATION_WS_URL: ws://notification-service:9091
+      AI_SERVICE_URL: http://ai-service:8089
+    depends_on:
+      auth-service: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8090/readyz >/dev/null"]
+      interval: 5s
+      timeout: 3s
+      retries: 40
+
+  web:
+    build:
+      context: ./frontend
+      dockerfile: web/Dockerfile
+    restart: unless-stopped
+    mem_limit: 64m
+    ports: ["127.0.0.1:3000:8080"]
+    depends_on:
+      web-gateway: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/ >/dev/null"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  pg-data:
+  kafka-data:
+  order-documents:
+  inventory-documents:

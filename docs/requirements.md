@@ -122,7 +122,7 @@ Requested ──approve──▶ Approved ──deliver──▶ Delivered ─�
 | Security | ES256 access tokens (15 min) with JWKS. Refresh tokens rotate on use and are revoked on logout. Web uses an httpOnly, Secure, SameSite cookie; mobile uses Bearer. Secrets never in the repo. |
 | Errors | Every error is `{ "error": { "code", "message", "requestId" } }` with an `X-Request-ID` header. No stack traces or internal paths. |
 | Reliability | Outbox for every event producer; idempotent consumers; dead-letter topics; timeouts and retries on every network call. |
-| Observability | Structured JSON logs with request id; `/healthz` (liveness) and `/readyz` (readiness: database and broker) on every service. |
+| Observability | Structured JSON logs with request id; `/livez` (liveness) and `/readyz` (readiness: database) on every service. |
 | Performance | Lists are paginated (`limit` ≤ 100) before data grows (BACKLOG for endpoints not yet paged). |
 | Localization | Slovenian (default) and English in web and mobile. |
 | Deployment | Same images and manifests in CI (kind) and on the VPS (k3s). The VPS has 8 GB RAM; the whole stack must fit in about 5.5 GB. |

@@ -41,3 +41,7 @@ docker-data/
 
 # Runtime uploads written by order-service and inventory-service (never source).
 **/Documents/
+
+# Playwright output
+**/test-results/
+**/playwright-report/

@@ -342,7 +342,9 @@ Internet ─443─> Traefik ingress ─┬─ app.<domain>      → web (nginx: 
                                  └─ nothing else is exposed (no DB, Kafka, service ports)
 ```
 
-**Sizing** (estimates; measured in phase 8 and adjusted):
+**Sizing.** Measured 2026-11-03 with `docker compose up` (idle, after the e2e tests): about **2.3 GB** in total
+(Spring apps 240–310 MB each, Kafka 480 MB, PostgreSQL 130 MB, .NET 55–115 MB, Node 25–55 MB). The
+original estimate below was conservative:
 
 | Part | RAM |
 |---|---|

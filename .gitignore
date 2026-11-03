@@ -19,6 +19,7 @@ Thumbs.db
 *.swo
 .env
 .env.*
+!.env.example
 *.env
 application-*.local.yml
 application-*.local.yaml

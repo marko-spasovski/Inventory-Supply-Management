@@ -168,7 +168,7 @@ services:
   # ──────────────────────────────────────────
   web-gateway:
     build:
-      context: ./gateway-service
+      context: ../../backend/gateways/web-gateway
     container_name: web-gateway
     network_mode: host
     environment:
@@ -185,7 +185,7 @@ services:
 
   mobile-gateway:
     build:
-      context: ./mobile-gateway
+      context: ../../backend/gateways/mobile-gateway
     container_name: mobile-gateway
     network_mode: host
     environment:
@@ -205,7 +205,7 @@ services:
   # ──────────────────────────────────────────
   ai-service:
     build:
-      context: ./services/ai-service
+      context: ../../backend/services/ai-service
     container_name: ai-service
     network_mode: host
     environment:
@@ -225,7 +225,7 @@ services:
   # ──────────────────────────────────────────
   shell:
     build:
-      context: ./micro-frontends/shell
+      context: ../../frontend/web/shell
     container_name: shell
     network_mode: host
     depends_on:
@@ -239,7 +239,7 @@ services:
 
   auth-mf:
     build:
-      context: ./micro-frontends/auth-mf
+      context: ../../frontend/web/auth-mf
     container_name: auth-mf
     ports:
       - "3001:80"
@@ -248,7 +248,7 @@ services:
 
   warehouses-mf:
     build:
-      context: ./micro-frontends/warehouses-mf
+      context: ../../frontend/web/warehouses-mf
     container_name: warehouses-mf
     ports:
       - "3002:80"
@@ -257,7 +257,7 @@ services:
 
   inventory-mf:
     build:
-      context: ./micro-frontends/inventory-mf
+      context: ../../frontend/web/inventory-mf
     container_name: inventory-mf
     ports:
       - "3003:80"
@@ -266,7 +266,7 @@ services:
 
   orders-mf:
     build:
-      context: ./micro-frontends/orders-mf
+      context: ../../frontend/web/orders-mf
     container_name: orders-mf
     ports:
       - "3004:80"
@@ -275,7 +275,7 @@ services:
 
   companies-mf:
     build:
-      context: ./micro-frontends/companies-mf
+      context: ../../frontend/web/companies-mf
     container_name: companies-mf
     ports:
       - "3005:80"
@@ -284,7 +284,7 @@ services:
 
   fleet-mf:
     build:
-      context: ./micro-frontends/fleet-mf
+      context: ../../frontend/web/fleet-mf
     container_name: fleet-mf
     ports:
       - "3006:80"
@@ -293,7 +293,7 @@ services:
 
   products-mf:
     build:
-      context: ./micro-frontends/products-mf
+      context: ../../frontend/web/products-mf
     container_name: products-mf
     ports:
       - "3007:80"

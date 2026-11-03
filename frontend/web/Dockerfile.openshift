@@ -1,0 +1,49 @@
+# Combined single-host frontend image for OpenShift.
+# Build context = frontend monorepo ROOT:
+#   docker build -f web/Dockerfile.openshift -t <repo>/web-frontend .
+#
+# Builds the shell + every micro-frontend from the workspace, wiring Module
+# Federation remotes to same-origin /mf/<name>/ paths, then serves everything
+# from one nginx. The Expo `mobile` workspace is dropped so the web build does
+# not pull native/Expo dependencies.
+FROM node:20 AS build
+WORKDIR /app
+
+COPY package.json package-lock.json tsconfig.base.json ./
+COPY .npmrc ./.npmrc
+COPY packages ./packages
+COPY web ./web
+
+# Drop the mobile (Expo) workspace, then install only web + shared packages.
+RUN node -e "const p=require('./package.json');p.workspaces=(p.workspaces||[]).filter(w=>!w.startsWith('mobile'));require('fs').writeFileSync('package.json',JSON.stringify(p,null,2))" \
+ && npm install --no-audit --no-fund
+
+# Build each micro-frontend with its own sub-path base so internal asset URLs
+# resolve under /mf/<name>/.
+RUN set -e; \
+    for name in auth warehouses inventory orders companies fleet products; do \
+      ( cd web/${name}-mf && npx vite build --base=/mf/${name}/ ); \
+    done
+
+# Build the shell with remotes pointing at the same-origin sub-paths.
+RUN cd web/shell && \
+    VITE_AUTH_MF_URL=/mf/auth/assets/remoteEntry.js \
+    VITE_WAREHOUSES_MF_URL=/mf/warehouses/assets/remoteEntry.js \
+    VITE_INVENTORY_MF_URL=/mf/inventory/assets/remoteEntry.js \
+    VITE_ORDERS_MF_URL=/mf/orders/assets/remoteEntry.js \
+    VITE_COMPANIES_MF_URL=/mf/companies/assets/remoteEntry.js \
+    VITE_FLEET_MF_URL=/mf/fleet/assets/remoteEntry.js \
+    VITE_PRODUCTS_MF_URL=/mf/products/assets/remoteEntry.js \
+    npx vite build
+
+FROM nginxinc/nginx-unprivileged:1.27-alpine
+COPY --from=build /app/web/shell/dist           /usr/share/nginx/html
+COPY --from=build /app/web/auth-mf/dist         /usr/share/nginx/html/mf/auth
+COPY --from=build /app/web/warehouses-mf/dist   /usr/share/nginx/html/mf/warehouses
+COPY --from=build /app/web/inventory-mf/dist    /usr/share/nginx/html/mf/inventory
+COPY --from=build /app/web/orders-mf/dist       /usr/share/nginx/html/mf/orders
+COPY --from=build /app/web/companies-mf/dist    /usr/share/nginx/html/mf/companies
+COPY --from=build /app/web/fleet-mf/dist        /usr/share/nginx/html/mf/fleet
+COPY --from=build /app/web/products-mf/dist     /usr/share/nginx/html/mf/products
+COPY web/nginx.openshift.conf /etc/nginx/conf.d/default.conf
+EXPOSE 8080

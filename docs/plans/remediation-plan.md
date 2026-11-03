@@ -10,6 +10,12 @@
 - Target repository: `git@github.com:marko-spasovski/Inventory-Supply-Management.git`
   (public, `main`, admin access confirmed).
 
+> **Scope change, 2026-11-03.** After phases 0–1, the goal was narrowed to a *working, demonstrable*
+> system rather than a production-grade one. Done: phases 0 and 1 (monorepo, standards, CI, hardened
+> images, compose), the critical fixes from phase 3/4 (R01, R03, R04, R05), and phase 8 (Kubernetes) with a
+> VPS guide for phase 9. Everything not done is listed, with how to fix it, in
+> [docs/KNOWN_ISSUES.md](../KNOWN_ISSUES.md). The phases below remain the roadmap for that work.
+
 ## 1. Goal and definition of done
 
 Goal: one repository that contains the whole system, where every business flow works as

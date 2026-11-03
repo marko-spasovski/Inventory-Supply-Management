@@ -1,154 +1,239 @@
-# Novo: Inventory & Supply ERP
+<div align="center">
 
-A web and mobile platform for inventory, procurement (supply orders), warehouse and fleet management.
+# Inventory & Supply ERP
 
-- **Backend:** nine polyglot microservices (Spring Boot, ASP.NET Core, Express/TypeScript). Each service owns its data, services talk over **gRPC** and **Kafka**, and two **JWT-authenticated gateways** sit in front of them.
-- **Frontend:** a React **Module Federation** shell with seven feature remotes, an **Expo** mobile app, and shared TypeScript packages.
-- **Ops:** PostgreSQL per service, Docker Compose for local runs, and OpenShift manifests for deployment.
+**Inventory, procurement, warehouse and fleet management, on the web and on the phone.**
 
-> Status: this is a development project, not a hardened product. See [the project review](docs/PROJECT_REVIEW_AND_DOCUMENTATION.md) for known issues (R01–R24) and a stabilisation plan.
+Nine microservices in three languages behind two gateways, a micro-frontend web app and an Expo mobile app,
+connected by gRPC and Kafka, running in Docker and on Kubernetes.
+
+[![e2e](https://github.com/marko-spasovski/Inventory-Supply-Management/actions/workflows/e2e.yml/badge.svg)](https://github.com/marko-spasovski/Inventory-Supply-Management/actions/workflows/e2e.yml)
+[![frontend](https://github.com/marko-spasovski/Inventory-Supply-Management/actions/workflows/frontend.yml/badge.svg)](https://github.com/marko-spasovski/Inventory-Supply-Management/actions/workflows/frontend.yml)
+[![repo-checks](https://github.com/marko-spasovski/Inventory-Supply-Management/actions/workflows/repo-checks.yml/badge.svg)](https://github.com/marko-spasovski/Inventory-Supply-Management/actions/workflows/repo-checks.yml)
+<br>
+![Spring Boot](https://img.shields.io/badge/Spring_Boot-3.5-6db33f?logo=springboot&logoColor=white)
+![.NET 9](https://img.shields.io/badge/.NET-9-512bd4?logo=dotnet&logoColor=white)
+![Node 24](https://img.shields.io/badge/Node.js-24-5fa04e?logo=nodedotjs&logoColor=white)
+![React 19](https://img.shields.io/badge/React-19-61dafb?logo=react&logoColor=black)
+![Expo 54](https://img.shields.io/badge/Expo-54-000020?logo=expo&logoColor=white)
+![PostgreSQL 16](https://img.shields.io/badge/PostgreSQL-16-4169e1?logo=postgresql&logoColor=white)
+![Kafka](https://img.shields.io/badge/Kafka-KRaft-231f20?logo=apachekafka&logoColor=white)
+![gRPC](https://img.shields.io/badge/gRPC-proto3-244c5a?logo=grpc&logoColor=white)
+![Kubernetes](https://img.shields.io/badge/Kubernetes-Kustomize-326ce5?logo=kubernetes&logoColor=white)
+
+![The dashboard](docs/screenshots/Dashboard.png)
+
+</div>
+
+## Contents
+
+- [What it does](#what-it-does)
+- [Screenshots](#screenshots)
+- [Architecture](#architecture)
+- [Tech stack](#tech-stack)
+- [Security](#security)
+- [Quick start](#quick-start)
+- [Testing and CI](#testing-and-ci)
+- [Deployment](#deployment)
+- [Project status](#project-status)
+- [Repository layout](#repository-layout)
+- [Documentation](#documentation)
+
+## What it does
+
+- **Supply orders end to end.** A manager orders a product from a supplier into a warehouse, picks a driver, and approves it. The driver marks it delivered, a warehouse worker uploads the signed delivery note and closes it, and **closing receives the stock**. The lifecycle is enforced on the server, so stock is added exactly once.
+- **Stock per product and warehouse**, with min/max thresholds, low- and out-of-stock warnings, and stock consumption for internal use with a PDF record.
+- **Master data:** supplier companies, warehouses with capacity, products and categories with SKUs, drivers and vehicles.
+- **Live notifications.** Order and stock events flow through Kafka into a notification feed, pushed to the browser and the phone over WebSocket.
+- **Inventory analytics:** a stock summary and reorder suggestions, optionally explained in plain language by Azure OpenAI.
+- **Mobile app** with a barcode/QR scanner for SKU lookup, push notifications and an offline-aware read cache.
+- **Roles:** ADMIN, MANAGER, WORKER and DRIVER. Slovenian (default) and English.
+
+## Screenshots
+
+| | |
+| --- | --- |
+| ![Supply orders](docs/screenshots/Orders.png) | ![Stock per warehouse](docs/screenshots/Stock.png) |
+| ![Products and categories](docs/screenshots/Products.png) | ![Warehouses with capacity](docs/screenshots/Warehouses.png) |
+| ![Drivers](docs/screenshots/Drivers.png) | ![Vehicles](docs/screenshots/Vehicles.png) |
+| ![Companies](docs/screenshots/Companies.png) | ![Notifications in dark mode](docs/screenshots/Notifications_Dark_Mode.png) |
 
 ## Architecture
 
-The system uses **microservices behind a BFF (backend-for-frontend) gateway per client**. Each bounded context is its own service with a database it owns. Calls that must complete before the request returns use gRPC, and side effects that can happen later go through Kafka events. On the frontend, a **micro-frontend** shell sits on the web side, and a separate native client sits on the mobile side.
+Microservices with a **backend-for-frontend gateway per client**. Each business area is one service that owns its
+database. Calls that need an answer go over **gRPC**, and facts other services react to are **Kafka events**.
 
 ```mermaid
 flowchart LR
     subgraph Clients
-        Web["React shell<br/>+ 7 MF remotes"]
+        Web["React shell<br/>+ 7 micro-frontends"]
         App["Expo mobile app"]
     end
-
     subgraph Edge["Gateways (JWT)"]
-        WGW["web-gateway<br/>Spring Cloud Gateway :8080<br/>cookie / Bearer"]
-        MGW["mobile-gateway<br/>Express BFF :8090<br/>Bearer + WS proxy"]
+        WGW["web-gateway<br/>Spring Cloud Gateway"]
+        MGW["mobile-gateway<br/>Express BFF + WS proxy"]
     end
-
-    subgraph Services["Domain services"]
-        Auth["auth :8081<br/>Spring"]
-        Company["company :8082<br/>Spring"]
-        Warehouse["warehouse :8084<br/>Spring"]
-        Inventory["inventory :8086<br/>Spring · gRPC :9090"]
-        Fleet["fleet :8083<br/>ASP.NET"]
-        Product["product :8085<br/>ASP.NET"]
-        Order["order :8087<br/>ASP.NET"]
-        Notif["notification :8088 / WS :9091<br/>Express"]
-        AI["ai :8089<br/>Express"]
+    subgraph Services
+        Auth["auth · Spring"]
+        Company["company · Spring"]
+        Warehouse["warehouse · Spring"]
+        Inventory["inventory · Spring<br/>gRPC server"]
+        Fleet["fleet · ASP.NET"]
+        Product["product · ASP.NET"]
+        Order["order · ASP.NET<br/>gRPC client"]
+        Notif["notification · Express<br/>WebSocket"]
+        AI["ai · Express"]
     end
-
-    Kafka[("Kafka")]
-    DB[("PostgreSQL<br/>one DB per service")]
+    Kafka[("Kafka (KRaft)")]
+    PG[("PostgreSQL<br/>one database + role per service")]
 
     Web --> WGW
     App --> MGW
-    WGW --> Auth & Company & Warehouse & Inventory & Fleet & Product & Order & Notif
-    MGW --> Auth & Company & Warehouse & Inventory & Fleet & Product & Order & Notif & AI
-    Order -- "gRPC AddStock" --> Inventory
+    WGW --> Services
+    MGW --> Services
+    Order -- "gRPC: receive stock on close" --> Inventory
     Order -- "order.created / order.status.changed" --> Kafka
     Inventory -- "inventory.stock.updated / low / out" --> Kafka
     Kafka --> Warehouse
     Kafka --> Notif
-    AI -. "read snapshot" .-> Inventory & Product & Warehouse
-    Services --- DB
+    AI -. reads .-> Inventory
+    Services --- PG
 ```
 
-### Architectural decisions
+| Concern | Choice |
+|---|---|
+| Service boundaries | One service per business area; no service reads another's database. Enforced by PostgreSQL: each service's role can connect only to its own database. |
+| Synchronous calls | gRPC with a shared `inventory.proto` (order → inventory), with a circuit breaker; a failed call leaves the order unchanged |
+| Asynchronous integration | Kafka topics for capacity projection and notifications |
+| Edge | Two gateways: Spring Cloud Gateway for web (httpOnly cookie), Express BFF for mobile (Bearer) |
+| Service internals | Layered: domain → application → infrastructure → presentation; inventory uses CQRS command/query handlers |
+| Web UI | Vite Module Federation: a shell loads seven independently built remotes |
+| Shared frontend code | npm workspace packages for DTO types, domain rules (roles, order states) and i18n |
+| Health | Every service exposes `/livez` and `/readyz` (503 when its database is down) |
 
-| Concern | Choice | Where |
+Decisions and their reasons are recorded as [ADRs](docs/decisions/), and the full design is in [docs/architecture.md](docs/architecture.md).
+
+## Tech stack
+
+| Layer | Technology | Used for |
 |---|---|---|
-| Service boundaries | One service per bounded context: auth, company, warehouse, inventory, fleet, product, order, notification, ai | `backend/services/*` |
-| Data ownership | Database-per-service (8 PostgreSQL DBs; `ai-service` is stateless and reads through other services' APIs) | `deploy/local/compose.yaml` |
-| Synchronous calls between services | gRPC with a shared `inventory.proto` contract | `inventory-service/src/main/proto`, `order-service/Protos` |
-| Asynchronous integration | Kafka events for capacity projection and notifications | see *Events* below |
-| Edge | One gateway per client type (BFF): web uses Spring Cloud Gateway, mobile uses Express | `backend/gateways/*` |
-| AuthN | JWT access and refresh tokens issued by `auth-service` and validated at the gateways | `auth-service`, `gateways/*/…/Jwt*` |
-| Service internals | Layered/clean: `domain` → `application` → `infrastructure` → `presentation` (inventory adds CQRS command/query handlers) | each service |
-| Web UI | Vite Module Federation: the shell hosts seven remotes (auth, companies, warehouses, products, fleet, inventory, orders) | `frontend/web/*` |
-| Shared frontend code | npm workspace packages for DTO types, domain (roles, order states, query keys) and i18n (SL/EN) | `frontend/packages/*` |
-| Real-time | Kafka → notification-service → WebSocket (proxied by the mobile gateway); Expo push tokens | `notification-service` |
-| Analytics | Inventory analysis and reorder suggestions, with an optional Azure OpenAI summary | `ai-service` |
+| Java services | **Java 21, Spring Boot 3.5**, Spring Data JPA, Spring Kafka, grpc-java | auth, company, warehouse, inventory |
+| .NET services | **.NET 9, ASP.NET Core**, EF Core migrations, Polly, Grpc.Net.Client, Confluent.Kafka | fleet, product, order |
+| Node services | **Node 24, TypeScript, Express**, KafkaJS, RxJS, ws, pg | notification, ai, mobile-gateway |
+| Web gateway | **Spring Cloud Gateway** (WebFlux) | routing and authentication for the web app |
+| Web | **React 19, Vite 5, Module Federation**, Vitest | shell + auth, companies, warehouses, products, fleet, inventory, orders |
+| Mobile | **Expo 54 (React Native 0.81)**, expo-router, TanStack Query, Zustand, Jest | native app |
+| Data and messaging | **PostgreSQL 16**, **Kafka 3.9 (KRaft)**, **gRPC/protobuf** | storage, events, the stock command |
+| Analytics | Azure OpenAI (optional) | plain-language inventory summaries |
+| Containers | **Docker**, multi-stage non-root images, docker compose | local stack, CI |
+| Orchestration | **Kubernetes + Kustomize**: kind locally, **k3s** on a VPS, Traefik, cert-manager | deployment |
+| CI | **GitHub Actions**: per-service pipelines, Semgrep, Trivy, gitleaks, actionlint, Playwright | quality gates |
 
-### Events
+## Security
 
-| Topic | Producer | Consumer |
+| Area | What is done |
+|---|---|
+| Accounts | Passwords hashed with BCrypt. Public registration can only create WORKER accounts; the first ADMIN is created from environment variables. |
+| Tokens | JWTs signed with a secret that exists only in the environment (never in source). The web app keeps its token in an httpOnly cookie; mobile uses Bearer. |
+| Data ownership | One PostgreSQL role per service, with no CONNECT right on any other service's database. |
+| Business rules | The order lifecycle is enforced on the server: invalid or repeated transitions are refused, and stock is received once. |
+| Network | Only the web entry point and the gateways are exposed; Kubernetes NetworkPolicies keep the rest internal. nginx forwards only WebSocket upgrades and never trusts the client's Host header. |
+| Containers | Every image runs as a non-root user; Kubernetes adds dropped capabilities, no privilege escalation and seccomp. |
+| Supply chain | Actions pinned to commit SHAs and scanners to image digests. CI fails on a fixable CRITICAL vulnerability (Trivy), any Semgrep finding, a critical npm advisory, or any secret in git history (gitleaks). |
+
+What is **not** done yet (for example, per-service role checks and driver ownership) is listed openly in
+[docs/KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md).
+
+## Quick start
+
+Needs Docker only.
+
+```bash
+git clone https://github.com/marko-spasovski/Inventory-Supply-Management.git
+cd Inventory-Supply-Management
+docker compose up --build --wait
+```
+
+| What | Where |
+|---|---|
+| Web app | http://localhost:3000 |
+| Web API (gateway) | http://localhost:8080 |
+| Mobile API (gateway) | http://localhost:8090 |
+| Login (local only) | `admin@novo.local` / `admin-local-only` |
+
+Stop with `docker compose down` (add `-v` to delete the data). For development with hot reload, `./run-local.sh`
+runs the infrastructure in Docker and the apps on your machine ([guide](docs/LOCAL_DEVELOPMENT.md)).
+For the mobile app, set `EXPO_PUBLIC_API_URL=http://<your-LAN-IP>:8090` and run `npm run mobile` in `frontend/`.
+
+## Testing and CI
+
+| Layer | Where | What it covers |
 |---|---|---|
-| `order.created`, `order.status.changed` | order | notification |
-| `inventory.stock.updated` | inventory | warehouse (capacity) |
-| `inventory.low`, `inventory.out` | inventory, warehouse | notification |
+| Unit and slice tests | JUnit 5 + Mockito (Spring), xUnit + Moq (.NET), Jest (Node), Vitest + Testing Library (web), jest-expo (mobile) | domain rules (order lifecycle, registration roles), handlers, controllers, gRPC client behaviour, config, UI components |
+| End-to-end | Playwright API tests in `tests/e2e` against the full stack | login → warehouse → category → product → stock; registration cannot create an ADMIN |
+| Static analysis | Semgrep (Java, C#, TypeScript, React, nginx, Dockerfile, secrets, OWASP Top 10), `tsc`, ESLint (`rules-of-hooks`) | every PR |
+| Supply chain | Trivy image and Dockerfile scans, `npm audit`, gitleaks over the full history | every PR |
 
-### Main flow: supply order
+Each service has its own path-filtered workflow built on a reusable pipeline per stack
+(`.github/workflows/_java-service.yml`, `_dotnet-service.yml`, `_node-service.yml`). The e2e workflow starts the
+whole stack on every PR. `release.yml` publishes every image to GHCR on each merge to `main`.
+See [.github/README.md](.github/README.md) and [docs/testing/baseline.md](docs/testing/baseline.md).
 
-1. A user creates an order (product + company + warehouse + driver + quantity) through a gateway → `order-service`.
-2. When the order is **approved**, `order-service` calls `inventory-service` over gRPC to add stock and publishes `order.status.changed`.
-3. `inventory-service` publishes `inventory.stock.updated`, and `warehouse-service` updates its used capacity.
-4. Threshold breaches emit `inventory.low` / `inventory.out`. `notification-service` stores them and pushes them over WebSocket or Expo push.
+## Deployment
+
+```bash
+# Local Kubernetes (kind): see deploy/k8s/README.md
+kubectl apply -k deploy/k8s/overlays/local
+
+# A VPS with k3s, Traefik and Let's Encrypt: see docs/operations/vps.md
+kubectl apply -k deploy/k8s/overlays/vps
+```
+
+The whole stack uses about **2.3 GB of RAM**, measured, so it fits on a single 8 GB VPS with room to spare.
+
+## Project status
+
+| Area | Status |
+|---|---|
+| Business flow: orders, stock, master data, notifications, analytics | ✅ working; e2e tested |
+| Critical security fixes: registration roles, secrets, order lifecycle, stock integrity | ✅ done |
+| Containers, docker compose, Kubernetes manifests (kind + k3s) | ✅ done |
+| CI: per-service pipelines, scans, e2e, image publishing | ✅ done |
+| Per-service authorization, driver ownership, refresh-token revocation | 🟡 open: [KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md) |
+| Outbox and idempotent consumers, capacity projection | 🟡 open: [KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md) |
+| Spring Boot 4, ES256 + JWKS, Flyway | ⬜ planned |
 
 ## Repository layout
 
 ```text
-Novo/
-├── README.md                     ← you are here
-├── run-local.sh                  one-command local stack (wraps scripts/run_local.py)
-├── .github/workflows/            ci.yml (build + test everything) · images.yml (push images for OpenShift)
-│
-├── backend/
-│   ├── gateways/
-│   │   ├── web-gateway/          Spring Cloud Gateway: web edge, JWT filter, routing
-│   │   └── mobile-gateway/       Express/TS BFF: mobile edge, JWT, WS proxy, AI routes
-│   ├── services/
-│   │   ├── auth-service/         Spring Boot: users, login, tokens
-│   │   ├── company-service/      Spring Boot: companies
-│   │   ├── warehouse-service/    Spring Boot: warehouses, capacity (Kafka consumer)
-│   │   ├── inventory-service/    Spring Boot: stock, thresholds (gRPC server, Kafka producer)
-│   │   ├── fleet-service/        ASP.NET Core: drivers, vehicles
-│   │   ├── product-service/      ASP.NET Core: products, categories, SKU
-│   │   ├── order-service/        ASP.NET Core: orders, PDFs (gRPC client, Kafka producer)
-│   │   ├── notification-service/ Express/TS: Kafka consumer, WebSocket, push tokens
-│   │   └── ai-service/           Express/TS: inventory analytics, reorder suggestions
-│   └── test-data/                seed scripts for sample business data
-│
-├── frontend/                     npm workspace root
-│   ├── packages/                 api-types · domain · i18n (shared by web + mobile)
-│   ├── web/
-│   │   ├── shell/                Module Federation host
-│   │   └── *-mf/                 7 feature remotes
-│   └── mobile/                   Expo Router app (scanner, push, offline-aware)
-│
-├── deploy/
-│   ├── local/                    compose.yaml (Postgres ×8, Kafka, optional .NET) + Dockerfile.dotnet
-│   ├── docker/                   older all-in-containers compose.yaml + legacy nginx.conf
-│   └── openshift/                manifests (config, Postgres, Kafka, services, gateways, frontend)
-│
-├── tests/
-│   └── e2e/                      Playwright API integration tests
-│
-├── scripts/                      local launcher (Python) and its unit tests
-│
-└── docs/
-    ├── PROJECT_REVIEW_AND_DOCUMENTATION.md   detailed review, API/event reference, findings
-    ├── LOCAL_DEVELOPMENT.md                  launcher usage and troubleshooting
-    ├── screenshots/                          UI screenshots
-    └── archive/                              historical notes (not authoritative)
+backend/
+  gateways/        web-gateway (Spring Cloud Gateway), mobile-gateway (Express BFF)
+  services/        auth, company, warehouse, inventory (Spring) · fleet, product, order (ASP.NET)
+                   notification, ai (Express)
+  test-data/       seed scripts
+frontend/          npm workspace
+  packages/        api-types · domain · i18n (shared by web and mobile)
+  web/             shell (Module Federation host) + 7 remotes, one nginx image
+  mobile/          Expo app
+deploy/
+  k8s/             Kustomize base + overlays (local, vps)
+  local/           compose file for ./run-local.sh
+db/init/           one database and role per service
+tests/e2e/         Playwright API tests
+docs/              architecture, requirements, ADRs, known issues, operations, review
+scripts/           local launcher
+docker-compose.yml the whole stack in containers
 ```
 
-Unit and integration tests live next to the code they test: JUnit under `src/test` for the Spring services, `*.Tests` projects for the .NET services, `__tests__` folders for Node and React, and `frontend/mobile/__tests__` for the mobile app.
+## Documentation
 
-## Quick start
-
-```bash
-./run-local.sh            # Postgres + Kafka in Docker; services, gateways and web on the host
-# open http://localhost:3000 when it prints STACK READY. Press q to stop.
-```
-
-See [docs/LOCAL_DEVELOPMENT.md](docs/LOCAL_DEVELOPMENT.md) for options (`--backend-only`, `--mobile`, `--dotnet docker`) and seeding.
-
-## Ports
-
-| Component | Port |
+| Document | What it covers |
 |---|---|
-| Web shell / remotes | 3000 / 3001–3007 |
-| web-gateway / mobile-gateway | 8080 / 8090 |
-| auth · company · fleet · warehouse · product · inventory · order · notification · ai | 8081 · 8082 · 8083 · 8084 · 8085 · 8086 · 8087 · 8088 · 8089 |
-| inventory gRPC / notification WS | 9090 / 9091 |
-| Kafka | 9092 |
-| PostgreSQL (auth … notification) | 5432–5439 |
+| [docs/architecture.md](docs/architecture.md) | structure, runtime, identity, order flow, events, pipeline |
+| [docs/requirements.md](docs/requirements.md) | roles, permission matrix, order lifecycle, stock rules |
+| [docs/decisions/](docs/decisions/) | 11 architecture decision records |
+| [docs/KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md) | what is fixed, what is still open, and how to fix it |
+| [docs/operations/vps.md](docs/operations/vps.md) | hosting on a VPS with k3s |
+| [docs/PROJECT_REVIEW_AND_DOCUMENTATION.md](docs/PROJECT_REVIEW_AND_DOCUMENTATION.md) | the full technical review (findings R01–R24) |
+| [docs/plans/remediation-plan.md](docs/plans/remediation-plan.md) | the improvement plan this work followed |
+| [AGENTS.md](AGENTS.md) | conventions, commands and rules for contributors |

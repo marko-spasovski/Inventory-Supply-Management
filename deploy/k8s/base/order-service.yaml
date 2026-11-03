@@ -1,0 +1,77 @@
+# order-service: generated from one definition per service (same settings as docker-compose.yml).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: order-service
+  labels: { app: order-service, tier: backend }
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate   # the documents volume is ReadWriteOnce (ADR 009)
+  selector:
+    matchLabels: { app: order-service }
+  template:
+    metadata:
+      labels: { app: order-service, tier: backend }
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: order-service
+          image: novo-order-service:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - { name: http, containerPort: 8087 }
+          env:
+            - name: DB_PASSWORD
+              valueFrom: { secretKeyRef: { name: novo-secrets, key: service-db-password } }
+            - { name: ASPNETCORE_ENVIRONMENT, value: "Development" }
+            - { name: Kafka__BootstrapServers, value: "kafka:9092" }
+            - { name: INVENTORY_GRPC_URL, value: "http://inventory-service:9090" }
+            - { name: DocumentStorage__BasePath, value: "/app/Documents" }
+            - { name: ConnectionStrings__DefaultConnection, value: "Host=postgres;Port=5432;Database=orders;Username=orders_svc;Password=$(DB_PASSWORD)" }
+          resources:
+            requests: { cpu: 50m, memory: 256Mi }
+            limits: { memory: 256Mi }
+          startupProbe:
+            httpGet: { path: /livez, port: http }
+            periodSeconds: 5
+            failureThreshold: 60
+          livenessProbe:
+            httpGet: { path: /livez, port: http }
+            periodSeconds: 20
+          readinessProbe:
+            httpGet: { path: /readyz, port: http }
+            periodSeconds: 10
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            capabilities: { drop: [ALL] }
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }
+            - { name: documents, mountPath: /app/Documents }
+      volumes:
+        - { name: tmp, emptyDir: {} }
+        - name: documents
+          persistentVolumeClaim: { claimName: order-documents }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: order-service
+spec:
+  selector: { app: order-service }
+  ports:
+    - { name: http, port: 8087, targetPort: http }
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: order-documents
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 1Gi

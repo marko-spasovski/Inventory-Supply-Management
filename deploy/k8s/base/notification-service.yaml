@@ -1,0 +1,68 @@
+# notification-service: generated from one definition per service (same settings as docker-compose.yml).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: notification-service
+  labels: { app: notification-service, tier: backend }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: notification-service }
+  template:
+    metadata:
+      labels: { app: notification-service, tier: backend }
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: notification-service
+          image: novo-notification-service:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - { name: http, containerPort: 8088 }
+            - { name: ws, containerPort: 9091 }
+          env:
+            - name: DB_PASSWORD
+              valueFrom: { secretKeyRef: { name: novo-secrets, key: service-db-password } }
+            - name: JWT_SECRET
+              valueFrom: { secretKeyRef: { name: novo-secrets, key: jwt-secret } }
+            - { name: DB_HOST, value: "postgres" }
+            - { name: DB_PORT, value: "5432" }
+            - { name: DB_NAME, value: "notifications" }
+            - { name: DB_USER, value: "notifications_svc" }
+            - { name: KAFKA_BROKERS, value: "kafka:9092" }
+          resources:
+            requests: { cpu: 50m, memory: 192Mi }
+            limits: { memory: 192Mi }
+          startupProbe:
+            httpGet: { path: /livez, port: http }
+            periodSeconds: 5
+            failureThreshold: 60
+          livenessProbe:
+            httpGet: { path: /livez, port: http }
+            periodSeconds: 20
+          readinessProbe:
+            httpGet: { path: /readyz, port: http }
+            periodSeconds: 10
+          securityContext:
+            runAsUser: 1000
+            runAsGroup: 1000
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }
+      volumes:
+        - { name: tmp, emptyDir: {} }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: notification-service
+spec:
+  selector: { app: notification-service }
+  ports:
+    - { name: http, port: 8088, targetPort: http }
+    - { name: ws, port: 9091, targetPort: ws }

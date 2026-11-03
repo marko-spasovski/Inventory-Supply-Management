@@ -1,0 +1,63 @@
+# company-service: generated from one definition per service (same settings as docker-compose.yml).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: company-service
+  labels: { app: company-service, tier: backend }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: company-service }
+  template:
+    metadata:
+      labels: { app: company-service, tier: backend }
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: company-service
+          image: novo-company-service:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - { name: http, containerPort: 8082 }
+          env:
+            - name: SPRING_DATASOURCE_PASSWORD
+              valueFrom: { secretKeyRef: { name: novo-secrets, key: service-db-password } }
+            - { name: SPRING_PROFILES_ACTIVE, value: "dev" }
+            - { name: SPRING_KAFKA_BOOTSTRAP_SERVERS, value: "kafka:9092" }
+            - { name: SPRING_JPA_SHOW_SQL, value: "false" }
+            - { name: SPRING_DEVTOOLS_RESTART_ENABLED, value: "false" }
+            - { name: SPRING_DATASOURCE_URL, value: "jdbc:postgresql://postgres:5432/companies" }
+            - { name: SPRING_DATASOURCE_USERNAME, value: "companies_svc" }
+          resources:
+            requests: { cpu: 50m, memory: 512Mi }
+            limits: { memory: 512Mi }
+          startupProbe:
+            httpGet: { path: /livez, port: http }
+            periodSeconds: 5
+            failureThreshold: 60
+          livenessProbe:
+            httpGet: { path: /livez, port: http }
+            periodSeconds: 20
+          readinessProbe:
+            httpGet: { path: /readyz, port: http }
+            periodSeconds: 10
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            capabilities: { drop: [ALL] }
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }
+      volumes:
+        - { name: tmp, emptyDir: {} }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: company-service
+spec:
+  selector: { app: company-service }
+  ports:
+    - { name: http, port: 8082, targetPort: http }

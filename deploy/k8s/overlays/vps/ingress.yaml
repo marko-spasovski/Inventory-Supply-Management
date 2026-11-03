@@ -1,0 +1,26 @@
+# Two public hosts; replace example.com with your domain (and the e-mail in cluster-issuer.yaml).
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: novo
+  namespace: novo
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.tls: "true"
+spec:
+  ingressClassName: traefik
+  tls:
+    - hosts: [app.example.com, api.example.com]
+      secretName: novo-tls
+  rules:
+    # Web: the shell and remotes; its nginx proxies /api to web-gateway and /ws to notifications.
+    - host: app.example.com
+      http:
+        paths:
+          - { path: /, pathType: Prefix, backend: { service: { name: web, port: { number: 8080 } } } }
+    # Mobile API (and its /ws WebSocket proxy).
+    - host: api.example.com
+      http:
+        paths:
+          - { path: /, pathType: Prefix, backend: { service: { name: mobile-gateway, port: { number: 8090 } } } }

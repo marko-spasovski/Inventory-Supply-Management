@@ -32,18 +32,19 @@ public class InventoryGrpcClientTest
     }
 
     [Fact]
-    public async Task SendInventoryAsync_DoesNotThrow_WhenCircuitIsOpen()
+    public async Task SendInventoryAsync_Throws_WhenCircuitIsOpen()
     {
         var client = new InventoryGrpcClient(BuildOpenCircuit(), _loggerMock.Object);
 
         var exception = await Record.ExceptionAsync(() =>
             client.SendInventoryAsync(Guid.NewGuid(), Guid.NewGuid(), 5));
 
-        Assert.Null(exception);
+        // R05: an open circuit must not look like a successful stock update.
+        Assert.IsType<order_service.Domain.Exceptions.InventoryUnavailableException>(exception);
     }
 
     [Fact]
-    public async Task SendInventoryAsync_DoesNotThrow_WhenCircuitIsOpen_CalledMultipleTimes()
+    public async Task SendInventoryAsync_Throws_WhenCircuitIsOpen_CalledMultipleTimes()
     {
         var openCircuit = BuildOpenCircuit();
         var client = new InventoryGrpcClient(openCircuit, _loggerMock.Object);
@@ -52,7 +53,7 @@ public class InventoryGrpcClientTest
         {
             var ex = await Record.ExceptionAsync(() =>
                 client.SendInventoryAsync(Guid.NewGuid(), Guid.NewGuid(), i + 1));
-            Assert.Null(ex);
+            Assert.IsType<order_service.Domain.Exceptions.InventoryUnavailableException>(ex);
         }
     }
 }

@@ -95,13 +95,13 @@ public class OrderServiceTest
         _repositoryMock.Verify(r => r.UpdateAsync(order), Times.Once);
     }
  
-    // Quarantined, not deleted: this asserts the approved behaviour (decision D1, goods receipt
-    // on Close). The code still adds stock on Approve. Re-enabled by phase 4 of
-    // docs/plans/remediation-plan.md (feat/goods-receipt). See docs/testing/baseline.md.
-    [Fact(Skip = "Phase 4 (D1): stock must be received on Close; code still does it on Approve")]
+    // Goods receipt on Close (decision D1). Was quarantined in phase 0 until the code matched.
+    [Fact]
     public async Task UpdateStatusAsync_WhenStatusIsClosed_CallsGrpcClient()
     {
         var order = new Order(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), 4);
+        order.UpdateStatus(Status.Approved);
+        order.UpdateStatus(Status.Delivered);
  
         _repositoryMock.Setup(r => r.GetByIdAsync(order.Id)).ReturnsAsync(order);
         _repositoryMock.Setup(r => r.UpdateAsync(It.IsAny<Order>())).ReturnsAsync((Order o) => o);
@@ -131,7 +131,7 @@ public class OrderServiceTest
             .Setup(k => k.PublishOrderStatusChangedAsync(It.IsAny<OrderStatusChangedEvent>()))
             .Returns(Task.CompletedTask);
  
-        await _service.UpdateStatusAsync(order.Id, Status.Delivered);
+        await _service.UpdateStatusAsync(order.Id, Status.Approved);
  
         _grpcClientMock.Verify(
             g => g.SendInventoryAsync(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<int>()),
@@ -145,9 +145,52 @@ public class OrderServiceTest
         var missingId = Guid.NewGuid();
         _repositoryMock.Setup(r => r.GetByIdAsync(missingId)).ReturnsAsync((Order?)null);
  
-        await Assert.ThrowsAsync<Exception>(() =>
+        await Assert.ThrowsAsync<order_service.Domain.Exceptions.OrderNotFoundException>(() =>
             _service.UpdateStatusAsync(missingId, Status.Approved)
         );
     }
+
+    // R04: approving twice must fail and must not touch inventory.
+    [Fact]
+    public async Task UpdateStatusAsync_RepeatedApproval_IsRefused_AndInventoryIsUntouched()
+    {
+        var order = new Order(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), 3);
+        order.UpdateStatus(Status.Approved);
+        _repositoryMock.Setup(r => r.GetByIdAsync(order.Id)).ReturnsAsync(order);
+
+        await Assert.ThrowsAsync<order_service.Domain.Exceptions.InvalidStatusTransitionException>(
+            () => _service.UpdateStatusAsync(order.Id, Status.Approved));
+
+        _grpcClientMock.Verify(g => g.SendInventoryAsync(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<int>()), Times.Never);
+        _repositoryMock.Verify(r => r.UpdateAsync(It.IsAny<Order>()), Times.Never);
+    }
+
+    // R05: if inventory-service does not confirm, the order is not saved as Closed.
+    [Fact]
+    public async Task UpdateStatusAsync_WhenInventoryFails_OrderIsNotSaved()
+    {
+        var order = new Order(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), 5);
+        order.UpdateStatus(Status.Approved);
+        order.UpdateStatus(Status.Delivered);
+        _repositoryMock.Setup(r => r.GetByIdAsync(order.Id)).ReturnsAsync(order);
+        _grpcClientMock
+            .Setup(g => g.SendInventoryAsync(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<int>()))
+            .ThrowsAsync(new order_service.Domain.Exceptions.InventoryUnavailableException("down"));
+
+        await Assert.ThrowsAsync<order_service.Domain.Exceptions.InventoryUnavailableException>(
+            () => _service.UpdateStatusAsync(order.Id, Status.Closed));
+
+        _repositoryMock.Verify(r => r.UpdateAsync(It.IsAny<Order>()), Times.Never);
+    }
+
+    [Theory]
+    [InlineData(Status.Requested, Status.Closed)]
+    [InlineData(Status.Requested, Status.Delivered)]
+    [InlineData(Status.Approved, Status.Requested)]
+    [InlineData(Status.Rejected, Status.Approved)]
+    [InlineData(Status.Closed, Status.Approved)]
+    public void Order_RefusesTransitionsOutsideTheStateMachine(Status from, Status to)
+    {
+        Assert.False(Order.CanTransition(from, to));
+    }
 }
- 

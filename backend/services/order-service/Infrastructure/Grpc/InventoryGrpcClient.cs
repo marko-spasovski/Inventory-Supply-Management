@@ -41,7 +41,10 @@ public class InventoryGrpcClient : IInventoryGrpcClient
                     Quantity    = quantity,
                 };
 
-                await client.UpdateInventoryAsync(request, cancellationToken: ct);
+                var response = await client.UpdateInventoryAsync(request,
+                    deadline: DateTime.UtcNow.AddSeconds(5), cancellationToken: ct);
+                if (!response.Success)
+                    throw new order_service.Domain.Exceptions.InventoryUnavailableException(response.Message);
 
                 _logger.LogInformation(
                     "[gRPC] Inventory updated — productId={ProductId}, warehouseId={WarehouseId}, qty={Quantity}",
@@ -50,11 +53,14 @@ public class InventoryGrpcClient : IInventoryGrpcClient
         }
         catch (BrokenCircuitException bce)
         {
-            // Circuit is open — degrade gracefully so the order status change still persists.
-            _logger.LogWarning(
-                "[CircuitBreaker] Skipping inventory gRPC call — circuit is OPEN. " +
-                "productId={ProductId}, warehouseId={WarehouseId}. Reason: {Reason}",
-                productId, warehouseId, bce.Message);
+            // Circuit is open. The caller must not save the status change (R05: this used to be
+            // swallowed, so orders were approved without their stock).
+            _logger.LogWarning("[CircuitBreaker] Inventory gRPC circuit is OPEN: {Reason}", bce.Message);
+            throw new order_service.Domain.Exceptions.InventoryUnavailableException("circuit open");
+        }
+        catch (global::Grpc.Core.RpcException rpc)
+        {
+            throw new order_service.Domain.Exceptions.InventoryUnavailableException(rpc.Status.Detail);
         }
     }
 }

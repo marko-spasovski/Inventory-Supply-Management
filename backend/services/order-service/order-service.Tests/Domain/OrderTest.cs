@@ -52,13 +52,16 @@ public class OrderTest
     }
 
     [Fact]
-    public void UpdateStatus_AllowsAnyTransition()
+    public void UpdateStatus_FollowsTheLifecycle_AndRefusesJumps()
     {
         var o = new Order(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), 1);
+        Assert.Throws<order_service.Domain.Exceptions.InvalidStatusTransitionException>(() => o.UpdateStatus(Status.Delivered));
+        o.UpdateStatus(Status.Approved);
         o.UpdateStatus(Status.Delivered);
         Assert.Equal(Status.Delivered, o.Status);
         o.UpdateStatus(Status.Closed);
         Assert.Equal(Status.Closed, o.Status);
+        Assert.Throws<order_service.Domain.Exceptions.InvalidStatusTransitionException>(() => o.UpdateStatus(Status.Closed));
     }
 
     [Fact]
